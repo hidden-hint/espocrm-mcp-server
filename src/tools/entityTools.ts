@@ -5,9 +5,12 @@ import { guard, jsonResult } from "./result.js";
 import type { ToolContext, ToolDef } from "./types.js";
 
 // EspoCRM entity types are PascalCase (Lead, COpportunity); tool names must be
-// lower snake_case: Lead -> lead, COpportunity -> c_opportunity.
+// lower snake_case: Lead -> lead, COpportunity -> c_opportunity, SalesOrder ->
+// sales_order. The first replace splits acronym/word boundaries (COpportunity ->
+// C_Opportunity, APIKey -> API_Key); the second splits lower/digit -> upper.
 export function toolSlug(entityType: string): string {
   return entityType
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
     .replace(/[^a-zA-Z0-9]+/g, "_")
     .toLowerCase();

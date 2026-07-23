@@ -50,7 +50,7 @@ async function handleOpenApiRequest(request: Request, response: Response, config
   response.json(document);
 }
 
-export async function runHttp(config: Config): Promise<void> {
+export function createApp(config: Config): express.Express {
   const app = express();
   app.use(express.json({ limit: "4mb" }));
 
@@ -71,6 +71,12 @@ export async function runHttp(config: Config): Promise<void> {
   app.get("/health", (_request, response) => {
     response.json({ status: "ok" });
   });
+
+  return app;
+}
+
+export async function runHttp(config: Config): Promise<void> {
+  const app = createApp(config);
 
   await new Promise<void>((resolve) => {
     app.listen(config.httpPort, () => {
