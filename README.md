@@ -149,12 +149,13 @@ claude mcp add --transport http espocrm https://mcp.example.com/mcp \
 
 ## Roadmap
 
-1. **MVP** ✅ — read-only tools, stdio + HTTP, apiKey + passthrough auth, metadata cache.
-2. **Typed per-entity tools + OpenAPI** ✅ — metadata-typed search filters, generated OpenAPI 3.1.
-3. **Writes** ✅ — `create_<entity>`, `update_<entity>`, `delete_<entity>`, `post_to_stream`, gated by `MCP_READ_ONLY`.
-4. **Relationships** — `link_records` / `unlink_records`, `linkMultiple` fields in write bodies.
-5. **OAuth + richness** — MCP OAuth, attachments, mass actions, MCP resources & prompts.
-6. **Hardening** — rate limiting, structured logging/tracing, portal support.
+1. ✅ **MVP** — read-only tools, stdio + HTTP, apiKey + passthrough auth, metadata cache.
+2. ✅ **Typed per-entity tools + OpenAPI** — metadata-typed search filters, generated OpenAPI 3.1.
+3. ✅ **Writes** — `create_<entity>`, `update_<entity>`, `delete_<entity>`, `post_to_stream`, gated by `MCP_READ_ONLY`.
+4. **Tool selection / curation** — let the operator choose exactly which tools are exposed, not just which entities. A large tool surface bloats context and degrades model tool-selection, so the person running the server should enable only what they need. Under consideration: per-operation selection (e.g. expose only `search`/`get`), an explicit tool allow/deny list (`MCP_TOOLS`), and per-entity operation sets. Composes with the existing `MCP_ENTITY_TYPES` and `MCP_READ_ONLY` levers.
+5. **Relationships** — `link_records` / `unlink_records`, `linkMultiple` fields in write bodies.
+6. **OAuth + richness** — MCP OAuth, attachments, mass actions, MCP resources & prompts.
+7. **Hardening** — rate limiting, structured logging/tracing, portal support.
 
 ## Development
 
