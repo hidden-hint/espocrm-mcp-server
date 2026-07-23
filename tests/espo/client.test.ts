@@ -74,6 +74,18 @@ test("getMetadata issues a GET to /api/v1/Metadata", async () => {
   assert.equal(calls[0]!.url.pathname, "/api/v1/Metadata");
 });
 
+test("getAppUser issues a GET to /api/v1/App/user carrying the credential", async () => {
+  const { calls } = stubFetch({ ok: true, status: 200, body: JSON.stringify({ token: "auth-token" }) });
+  const result = await new EspoClient("https://crm.example.test", {
+    kind: "espoAuthorization",
+    value: "dXNlcjpwYXNz",
+  }).getAppUser();
+  assert.deepEqual(result, { token: "auth-token" });
+  assert.equal(calls[0]!.method, "GET");
+  assert.equal(calls[0]!.url.pathname, "/api/v1/App/user");
+  assert.equal(calls[0]!.headers["Espo-Authorization"], "dXNlcjpwYXNz");
+});
+
 test("create issues a POST with a JSON body", async () => {
   const { calls } = stubFetch({ ok: true, status: 200, body: JSON.stringify({ id: "new" }) });
   const result = await new EspoClient("https://crm.example.test", CRED).create("Lead", { name: "Ann" });

@@ -23,7 +23,7 @@
     "test:coverage": "node --import tsx --test --experimental-test-coverage \"tests/**/*.test.ts\""
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "express": "^4.21.2",
     "zod": "^3.23.8"
   },
