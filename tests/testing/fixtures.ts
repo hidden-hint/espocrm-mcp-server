@@ -7,13 +7,15 @@ const BASE_CONFIG: Config = {
   baseUrl: "https://crm.example.test",
   authMode: "apiKey",
   apiKey: "test-key",
-  passthroughAs: "apiKey",
   transport: "http",
   httpPort: 3000,
   httpPath: "/mcp",
   readOnly: true,
   entityTypes: ["Lead"],
   metadataTtlSeconds: 300,
+  oauthIssuerUrl: undefined,
+  oauthEncryptionKey: undefined,
+  accessTokenTtlSeconds: 3600,
 };
 
 export function makeConfig(overrides: Partial<Config>): Config {

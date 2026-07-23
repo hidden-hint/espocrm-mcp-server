@@ -34,6 +34,10 @@ export class EspoClient {
     return this.request("GET", "Metadata", {});
   }
 
+  getAppUser(): Promise<Record<string, unknown>> {
+    return this.request("GET", "App/user", {});
+  }
+
   create(entityType: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
     return this.request("POST", encodeURIComponent(entityType), { body: data });
   }

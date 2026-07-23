@@ -6,9 +6,9 @@ Because it talks only to the REST API, it is not a derivative of the AGPL-licens
 
 ## Design
 
-- **Stateless credential relay.** The server holds no privileged key in multi-user mode. Each request carries the caller's own EspoCRM credential; the server forwards it and EspoCRM enforces **that user's ACL**. A sales rep sees exactly their own leads — the same slice they'd see in the web UI.
+- **Stateless per-user auth.** In `oauth` mode the server stores no EspoCRM credential and keeps no session store. Each caller logs in with their own EspoCRM username/password and every request carries a token that *contains* that user's (encrypted) EspoCRM credential; the server unwraps it and EspoCRM enforces **that user's ACL**. A sales rep sees exactly their own leads — the same slice they'd see in the web UI.
 - **Metadata-driven.** Entity types, fields, and enum options are read from `/api/v1/Metadata` at runtime, so the generic tools adapt to any instance's custom entities and fields.
-- **Two transports.** `stdio` for local single-user use; Streamable HTTP for a shared, containerized deployment.
+- **Two transports.** `stdio` for local single-user use; Streamable HTTP (with built-in OAuth 2.1) for a shared, containerized deployment.
 
 ## Tools
 
@@ -67,29 +67,56 @@ Create/update bodies exclude system and read-only fields (`id`, `createdAt`, `mo
 The server generates an **OpenAPI 3.1** document describing the EspoCRM REST operations it proxies for the allowlisted entities, with entity schemas typed from the same live metadata that drives the search filters (enum options, `date-time`/`email` formats, link `…Id`/`…Name` pairs, required fields). Tools and spec share one source of truth, so they never drift — including writes: when `MCP_READ_ONLY=false`, the spec gains the matching `POST`/`PATCH`/`DELETE` operations with request bodies from the same field mapping.
 
 ```bash
-# Live endpoint (http transport)
+# Live endpoint (http transport). In oauth mode it requires a bearer token:
+#   curl -H "Authorization: Bearer <access-token>" http://localhost:3000/openapi.json
 curl http://localhost:3000/openapi.json
 
-# Snapshot for codegen / commit
-node dist/index.js --print-openapi > espocrm.openapi.json   # needs ESPOCRM_API_KEY
+# Snapshot for codegen / commit (run in apiKey mode; needs ESPOCRM_API_KEY)
+node dist/index.js --print-openapi > espocrm.openapi.json
 ```
 
 Feed the snapshot to `openapi-generator` for typed client SDKs, or into API docs tooling.
 
-## Quick start
-
-### Local (stdio, single user)
+## Build
 
 ```bash
 npm install
-npm run build
-
-ESPOCRM_BASE_URL=https://crm.example.com \
-ESPOCRM_API_KEY=your-api-user-key \
-node dist/index.js
+npm run build          # compiles to dist/
 ```
 
-Wire it into Claude Desktop (`claude_desktop_config.json`):
+You need an EspoCRM instance reachable over HTTPS and at least one credential (see [Authentication](#authentication)).
+
+## Authentication
+
+The server contains **no authorization logic of its own** — EspoCRM always enforces the ACL. There are two modes:
+
+| Mode | `ESPOCRM_AUTH_MODE` | Who the caller acts as | Transports | Per-user ACL |
+|------|---------------------|------------------------|------------|--------------|
+| Shared key | `apiKey` (default) | One API User, for everyone | stdio, http | No |
+| OAuth 2.1 | `oauth` | Each user, via their own login | http only | Yes |
+
+- **`apiKey`** — the server holds one EspoCRM API key (`ESPOCRM_API_KEY`) and uses it for every request. Simplest; ideal for a single user over stdio (Claude Desktop, local Claude Code). Everyone who can reach the server acts as that one EspoCRM identity. Create the key in EspoCRM under *Administration → API Users*.
+- **`oauth`** — the server is an OAuth 2.1 Authorization Server **and** Resource Server. Each user logs in with their **EspoCRM username and password** on a page the server hosts; the server exchanges that for the user's EspoCRM auth token and issues its own access/refresh tokens. Requires `MCP_TRANSPORT=http`.
+
+### How the OAuth flow works
+
+Stock MCP clients (Claude Code, Claude Desktop, …) drive this automatically — you only give them the URL. Under the hood:
+
+1. The client `POST`s to `/mcp` with no token and gets **401** with a `WWW-Authenticate` header pointing at `/.well-known/oauth-protected-resource/mcp`.
+2. It discovers the Authorization Server, registers via Dynamic Client Registration, and opens `/authorize`.
+3. The server shows a **login page**; the user enters their EspoCRM username + password. The server validates them against EspoCRM (`GET /api/v1/App/user`) and redirects back with an authorization code (PKCE-protected).
+4. The client exchanges the code at `/token` for an **access token** (default 1 h) and a **refresh token**.
+5. The client calls `/mcp` with `Authorization: Bearer <access token>`; EspoCRM enforces that user's ACL.
+
+**Tokens are self-contained and encrypted.** The access token carries the user's EspoCRM auth token, and the refresh token carries the credential needed to silently mint a fresh one when EspoCRM's token idle-expires (`authTokenMaxIdleTime`, default 48 h). Both are sealed with `MCP_OAUTH_ENCRYPTION_KEY` (AES-256-GCM), so the server keeps **no session state** — but treat that key as a secret, and always run behind TLS (passwords transit the login page).
+
+> **Limitations.** Token revocation is not yet implemented, so a token is valid until it expires — keep `MCP_ACCESS_TOKEN_TTL` modest. The Dynamic Client Registration store is in-memory, so clients re-register automatically after a server restart.
+
+## Connecting an AI client
+
+### Claude Desktop (stdio, shared key)
+
+Edit `claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`; Windows: `%APPDATA%\Claude\claude_desktop_config.json`):
 
 ```jsonc
 {
@@ -106,56 +133,122 @@ Wire it into Claude Desktop (`claude_desktop_config.json`):
 }
 ```
 
-### Remote (HTTP, per-user ACL via Docker)
+Restart Claude Desktop. This runs the server on stdio in `apiKey` mode — everyone using this desktop acts as that one API key. To enable write tools, add `"MCP_READ_ONLY": "false"` to `env`.
+
+### Claude Code — local (stdio, shared key)
 
 ```bash
-ESPOCRM_BASE_URL=https://crm.example.com docker compose up --build
+claude mcp add espocrm \
+  --env ESPOCRM_BASE_URL=https://crm.example.com \
+  --env ESPOCRM_API_KEY=your-api-user-key \
+  -- node /absolute/path/to/espocrm-mcp-server/dist/index.js
 ```
 
-The container runs in `passthrough` mode: each MCP client sends its own credential. Connect from Claude Code, forwarding the user's key/token as a header:
+### Claude Code — remote (HTTP, per-user OAuth)
+
+Run the server over HTTP in `oauth` mode first (see [Deploying](#deploying-the-http-server-oauth)), then add it **with no credential** — the client runs the OAuth login flow itself:
 
 ```bash
-# Per-user EspoCRM auth token (recommended — enforces that user's ACL)
-claude mcp add --transport http espocrm https://mcp.example.com/mcp \
-  --header "Espo-Authorization: $(printf '%s:%s' "$USERNAME" "$TOKEN" | base64)"
-
-# Or a per-user API key
-claude mcp add --transport http espocrm https://mcp.example.com/mcp \
-  --header "X-Api-Key: <user-api-key>"
+claude mcp add --transport http espocrm https://mcp.crm.example.com/mcp
 ```
 
-> **Note.** EspoCRM auth tokens idle-expire after `authTokenMaxIdleTime` hours (default 48). For a long-lived MCP connection, raise or disable that setting on the instance and mint dedicated per-user tokens.
+The first time you use it, Claude Code opens a browser to the server's login page; sign in with your EspoCRM username and password. Each user does this once and thereafter acts under their own ACL. No API keys or headers to distribute.
+
+### Other MCP clients (Cursor, VS Code, …)
+
+Most MCP clients accept the same two shapes in their config file (Cursor: `~/.cursor/mcp.json`; VS Code: `.vscode/mcp.json`).
+
+Stdio (shared key):
+
+```json
+{
+  "mcpServers": {
+    "espocrm": {
+      "command": "node",
+      "args": ["/absolute/path/to/espocrm-mcp-server/dist/index.js"],
+      "env": {
+        "ESPOCRM_BASE_URL": "https://crm.example.com",
+        "ESPOCRM_API_KEY": "your-api-user-key"
+      }
+    }
+  }
+}
+```
+
+Remote HTTP (per-user OAuth) — no credential needed; the client runs the login flow:
+
+```json
+{
+  "mcpServers": {
+    "espocrm": {
+      "url": "https://mcp.crm.example.com/mcp"
+    }
+  }
+}
+```
+
+VS Code uses a top-level `"servers"` key instead of `"mcpServers"`; the per-server shape is the same. The client must support MCP OAuth (most current ones do).
+
+## Deploying the HTTP server (OAuth)
+
+`docker-compose.yml` is preconfigured for `oauth` mode (`ESPOCRM_AUTH_MODE=oauth`, `MCP_TRANSPORT=http`). It needs the public URL and an encryption key:
+
+```bash
+export ESPOCRM_BASE_URL=https://crm.example.com
+export MCP_OAUTH_ISSUER_URL=https://mcp.crm.example.com     # the public URL of THIS server
+export MCP_OAUTH_ENCRYPTION_KEY=$(openssl rand -base64 32)  # keep this secret and stable
+docker compose up --build
+```
+
+Put it behind **TLS** (a reverse proxy) — passwords are entered on the login page, and `MCP_OAUTH_ISSUER_URL` must be the `https://` URL clients reach. The MCP endpoint is **POST-only and stateless** — `GET`/`DELETE` return 405.
+
+Without Docker:
+
+```bash
+ESPOCRM_BASE_URL=https://crm.example.com \
+ESPOCRM_AUTH_MODE=oauth \
+MCP_TRANSPORT=http \
+MCP_OAUTH_ISSUER_URL=https://mcp.crm.example.com \
+MCP_OAUTH_ENCRYPTION_KEY=$(openssl rand -base64 32) \
+node dist/index.js
+```
+
+Verify the OAuth surface is live:
+
+```bash
+curl https://mcp.crm.example.com/.well-known/oauth-protected-resource/mcp   # → JSON with authorization_servers
+curl -i -X POST https://mcp.crm.example.com/mcp -d '{}' -H 'Content-Type: application/json'   # → 401 + WWW-Authenticate
+```
 
 ## Configuration
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `ESPOCRM_BASE_URL` | — (required) | Target EspoCRM base URL |
-| `ESPOCRM_AUTH_MODE` | `apiKey` | `apiKey` (shared) or `passthrough` (per-user; http only) |
+| `ESPOCRM_AUTH_MODE` | `apiKey` | `apiKey` (shared) or `oauth` (per-user; http only) |
 | `ESPOCRM_API_KEY` | — | Required for `apiKey` mode |
-| `MCP_PASSTHROUGH_AS` | `apiKey` | How to forward a bare `Authorization: Bearer` header |
+| `MCP_OAUTH_ISSUER_URL` | — | Required for `oauth` mode — the public HTTPS URL of this server (issuer / resource identifier) |
+| `MCP_OAUTH_ENCRYPTION_KEY` | — | Required for `oauth` mode — 32-byte key sealing the tokens (`openssl rand -base64 32`) |
+| `MCP_ACCESS_TOKEN_TTL` | `3600` | Access-token lifetime in seconds (`oauth` mode) |
 | `MCP_TRANSPORT` | `stdio` | `stdio` or `http` |
 | `MCP_HTTP_PORT` | `3000` | HTTP port |
 | `MCP_HTTP_PATH` | `/mcp` | HTTP endpoint path |
-| `MCP_READ_ONLY` | `true` | Reserved for Phase 2 write tools |
+| `MCP_READ_ONLY` | `true` | Set `false` to register write tools (`create`/`update`/`delete`/`post_to_stream`) |
 | `MCP_ENTITY_TYPES` | `Lead,Contact,Account,Opportunity` | Entity types exposed as dedicated `search_<entity>` / `get_<entity>` tools |
 | `ESPOCRM_METADATA_TTL` | `300` | Metadata cache lifetime (seconds) |
 
-## Auth modes
-
-- **`apiKey`** — a single shared EspoCRM API key. Everyone connected sees the same scope. Fine for personal/stdio use.
-- **`passthrough`** — the per-user answer. The server forwards each caller's `X-Api-Key`, `Espo-Authorization`, or `Authorization: Bearer` header to EspoCRM. No shared super-key; ACL is per user.
-- **OAuth** — planned. Requires EspoCRM to act as an OAuth authorization server; tracked as a joint roadmap item.
+See [Authentication](#authentication) for how the modes and the OAuth flow work.
 
 ## Roadmap
 
-1. ✅ **MVP** — read-only tools, stdio + HTTP, apiKey + passthrough auth, metadata cache.
+1. ✅ **MVP** — read-only tools, stdio + HTTP, metadata cache.
 2. ✅ **Typed per-entity tools + OpenAPI** — metadata-typed search filters, generated OpenAPI 3.1.
 3. ✅ **Writes** — `create_<entity>`, `update_<entity>`, `delete_<entity>`, `post_to_stream`, gated by `MCP_READ_ONLY`.
-4. **Tool selection / curation** — let the operator choose exactly which tools are exposed, not just which entities. A large tool surface bloats context and degrades model tool-selection, so the person running the server should enable only what they need. Under consideration: per-operation selection (e.g. expose only `search`/`get`), an explicit tool allow/deny list (`MCP_TOOLS`), and per-entity operation sets. Composes with the existing `MCP_ENTITY_TYPES` and `MCP_READ_ONLY` levers.
-5. **Relationships** — `link_records` / `unlink_records`, `linkMultiple` fields in write bodies.
-6. **OAuth + richness** — MCP OAuth, attachments, mass actions, MCP resources & prompts.
-7. **Hardening** — rate limiting, structured logging/tracing, portal support.
+4. ✅ **MCP OAuth** — OAuth 2.1 AS + RS; per-user login against EspoCRM, encrypted self-contained tokens, refresh. (Remaining: token revocation, persistent client store.)
+5. **Tool selection / curation** — let the operator choose exactly which tools are exposed, not just which entities. A large tool surface bloats context and degrades model tool-selection, so the person running the server should enable only what they need. Under consideration: per-operation selection (e.g. expose only `search`/`get`), an explicit tool allow/deny list (`MCP_TOOLS`), and per-entity operation sets. Composes with the existing `MCP_ENTITY_TYPES` and `MCP_READ_ONLY` levers.
+6. **Relationships** — `link_records` / `unlink_records`, `linkMultiple` fields in write bodies.
+7. **Richness** — attachments, mass actions, MCP resources & prompts.
+8. **Hardening** — token revocation, structured logging/tracing, portal support.
 
 ## Development
 

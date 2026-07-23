@@ -1,6 +1,5 @@
-import type { IncomingHttpHeaders } from "node:http";
 import type { Config } from "../config.js";
-import { AuthError, ConfigError } from "../errors.js";
+import { ConfigError } from "../errors.js";
 
 export type EspoCredential =
   | { kind: "apiKey"; apiKey: string }
@@ -23,37 +22,6 @@ export function credentialFromConfig(config: Config): EspoCredential {
   return { kind: "apiKey", apiKey: config.apiKey };
 }
 
-function headerValue(headers: IncomingHttpHeaders, name: string): string | undefined {
-  const value = headers[name];
-
-  return Array.isArray(value) ? value[0] : value;
-}
-
-export function credentialFromRequest(headers: IncomingHttpHeaders, config: Config): EspoCredential {
-  if (config.authMode === "apiKey") {
-    return credentialFromConfig(config);
-  }
-
-  const apiKey = headerValue(headers, "x-api-key");
-  if (apiKey !== undefined && apiKey !== "") {
-    return { kind: "apiKey", apiKey };
-  }
-
-  const espoAuthorization = headerValue(headers, "espo-authorization");
-  if (espoAuthorization !== undefined && espoAuthorization !== "") {
-    return { kind: "espoAuthorization", value: espoAuthorization };
-  }
-
-  const authorization = headerValue(headers, "authorization");
-  if (authorization !== undefined && authorization !== "") {
-    const token = authorization.replace(/^Bearer\s+/i, "");
-
-    return config.passthroughAs === "espoAuthorization"
-      ? { kind: "espoAuthorization", value: token }
-      : { kind: "apiKey", apiKey: token };
-  }
-
-  throw new AuthError(
-    "No EspoCRM credential in request. Send X-Api-Key, Espo-Authorization, or Authorization: Bearer <token>.",
-  );
+export function espoAuthorizationCredential(username: string, secret: string): EspoCredential {
+  return { kind: "espoAuthorization", value: Buffer.from(`${username}:${secret}`, "utf8").toString("base64") };
 }

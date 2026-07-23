@@ -3,7 +3,42 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { createApp } from "../../src/transport/http.js";
+import { decodeKey, sealToken } from "../../src/oauth/tokens.js";
 import { makeConfig, SAMPLE_METADATA } from "../testing/fixtures.js";
+
+const OAUTH_KEY = Buffer.alloc(32, 9).toString("base64");
+
+function oauthConfig(): Parameters<typeof createApp>[0] {
+  return makeConfig({
+    transport: "http",
+    authMode: "oauth",
+    apiKey: undefined,
+    baseUrl: "https://crm.example.test",
+    oauthIssuerUrl: "https://mcp.example.test",
+    oauthEncryptionKey: OAUTH_KEY,
+  });
+}
+
+function accessToken(): string {
+  return sealToken(
+    {
+      kind: "access",
+      espoCredential: { kind: "espoAuthorization", value: "sealed" },
+      clientId: "c",
+      scopes: [],
+      aud: "https://mcp.example.test/mcp",
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    },
+    decodeKey(OAUTH_KEY),
+  );
+}
+
+const INITIALIZE_REQUEST = {
+  jsonrpc: "2.0",
+  id: 1,
+  method: "initialize",
+  params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "test", version: "1" } },
+};
 
 const realFetch = globalThis.fetch;
 
@@ -76,8 +111,8 @@ test("the health endpoint reports ok", async () => {
   }
 });
 
-test("a POST without a credential in passthrough mode returns 401", async () => {
-  const app = await startApp(makeConfig({ transport: "http", authMode: "passthrough", apiKey: undefined }));
+test("in oauth mode a POST without a bearer token returns 401 with a WWW-Authenticate header", async () => {
+  const app = await startApp(oauthConfig());
   try {
     const response = await fetch(`http://127.0.0.1:${app.port}/mcp`, {
       method: "POST",
@@ -85,7 +120,50 @@ test("a POST without a credential in passthrough mode returns 401", async () => 
       body: "{}",
     });
     assert.equal(response.status, 401);
-    assert.equal((await response.json()).error.code, -32001);
+    assert.match(response.headers.get("www-authenticate") ?? "", /resource_metadata/);
+  } finally {
+    await app.close();
+  }
+});
+
+test("in oauth mode the protected-resource metadata advertises the authorization server", async () => {
+  const app = await startApp(oauthConfig());
+  try {
+    const response = await fetch(`http://127.0.0.1:${app.port}/.well-known/oauth-protected-resource/mcp`);
+    assert.equal(response.status, 200);
+    const doc = await response.json();
+    assert.ok(Array.isArray(doc.authorization_servers) && doc.authorization_servers.length >= 1);
+  } finally {
+    await app.close();
+  }
+});
+
+test("in oauth mode the authorization-server metadata is served", async () => {
+  const app = await startApp(oauthConfig());
+  try {
+    const response = await fetch(`http://127.0.0.1:${app.port}/.well-known/oauth-authorization-server`);
+    assert.equal(response.status, 200);
+    assert.ok((await response.json()).token_endpoint);
+  } finally {
+    await app.close();
+  }
+});
+
+test("in oauth mode a POST with a valid access token reaches the MCP server", async () => {
+  stubEspoFetch();
+  const app = await startApp(oauthConfig());
+  try {
+    const response = await fetch(`http://127.0.0.1:${app.port}/mcp`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${accessToken()}`,
+      },
+      body: JSON.stringify(INITIALIZE_REQUEST),
+    });
+    assert.equal(response.status, 200);
+    assert.ok((await response.json()).result);
   } finally {
     await app.close();
   }

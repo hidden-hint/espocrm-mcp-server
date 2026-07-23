@@ -43,7 +43,7 @@ ESPOCRM_BASE_URL=https://crm.example.com ESPOCRM_API_KEY=key node dist/index.js
 node dist/index.js --print-openapi > espocrm.openapi.json   # needs ESPOCRM_API_KEY
 ```
 
-`docker compose up --build` runs the HTTP transport in `passthrough` mode.
+`docker compose up --build` runs the HTTP transport in `oauth` mode (needs `MCP_OAUTH_ISSUER_URL` + `MCP_OAUTH_ENCRYPTION_KEY`).
 
 ## Architecture
 
@@ -51,15 +51,16 @@ An MCP server that projects any EspoCRM instance to MCP clients over EspoCRM's *
 
 Two invariants drive the whole design; preserve them:
 
-1. **Stateless per-request credential relay.** The server holds no privileged key in `passthrough` mode. Each MCP request carries the caller's own EspoCRM credential; the server forwards it and EspoCRM enforces *that user's* ACL. There is no server-side authorization logic to add — never introduce shared state or a super-key that would bypass this.
+1. **Stateless per-user auth.** The server holds no privileged key in `oauth` mode and keeps no session store. Each caller logs in against EspoCRM and receives an encrypted, self-contained token that *carries* their EspoCRM credential (sealed with `MCP_OAUTH_ENCRYPTION_KEY`); `verifyAccessToken` unwraps it per request and EspoCRM enforces *that user's* ACL. There is no server-side authorization logic to add — never introduce shared state or a super-key that would bypass this, and never persist the unwrapped credential.
 2. **Metadata is the single source of truth.** Search filters, write-tool inputs, and the OpenAPI schema are all generated from the same field mapping in `src/espo/fields.ts`. When you touch how a field type maps to a parameter/schema, change it there so tools and spec cannot drift.
 
 ### Request flow
 
 - `src/index.ts` → `loadConfig` → picks transport.
 - **stdio** (`src/transport/stdio.ts`): one `buildServer` for the process, credential from `ESPOCRM_API_KEY`.
-- **http** (`src/transport/http.ts`): a *fresh* `McpServer` + transport **per request** (`sessionIdGenerator: undefined`, stateless), each bound to a `ToolContext` built from that request's headers. `GET`/`DELETE` on the MCP path return 405 — this server is POST-only and stateless.
-- `src/context.ts` builds a `ToolContext` = `{ espo: EspoClient, metadata: MetadataService }`. The `EspoClient` is already authenticated as the caller, so **every tool inherits that user's ACL for free** — tools never check permissions themselves.
+- **http** (`src/transport/http.ts`): a *fresh* `McpServer` + transport **per request** (`sessionIdGenerator: undefined`, stateless). `createApp` branches on `authMode`: `apiKey` builds the context from `contextFromConfig` (shared key); `oauth` mounts the SDK's `mcpAuthRouter` + a `/oauth/login` route, gates `/mcp` and `/openapi.json` with `requireBearerAuth`, and builds the context from the credential the provider unwraps into `req.auth.extra.espoCredential`. `GET`/`DELETE` on the MCP path return 405 — this server is POST-only and stateless.
+- `src/context.ts` builds a `ToolContext` = `{ espo: EspoClient, metadata: MetadataService }` from a resolved `EspoCredential` (`contextFromCredential`, or `contextFromConfig` for the shared key). The `EspoClient` is already authenticated as the caller, so **every tool inherits that user's ACL for free** — tools never check permissions themselves.
+- **OAuth** (`src/oauth/`): the server is its own OAuth 2.1 AS + RS. `EspoOAuthServerProvider` (`provider.ts`) implements the SDK `OAuthServerProvider` — it authenticates username/password against EspoCRM (`GET App/user`) and issues AES-256-GCM-sealed access/refresh tokens (`tokens.ts`) that embed the EspoCRM credential; `login.ts`/`loginPage.ts` render and handle the login form; `clientStore.ts` is the in-memory DCR registry. See the Auth invariant above.
 - `src/server.ts` (`buildServer`) registers whatever `collectTools` returns onto the `McpServer`.
 
 ### Tool generation (`src/tools/`)
@@ -84,7 +85,7 @@ One place classifies EspoCRM field types into three renderings, kept in lockstep
 
 - `src/espo/client.ts`: thin `fetch` wrapper over `/api/v1/`. Credential headers only.
 - `src/espo/query.ts` `applyQuery`: serializes nested params into EspoCRM's PHP bracket notation (`where[0][type]=equals`). Any query param object goes through here.
-- `src/espo/credential.ts`: header → `EspoCredential`. Precedence in passthrough: `X-Api-Key` → `Espo-Authorization` → `Authorization: Bearer` (interpreted per `MCP_PASSTHROUGH_AS`).
+- `src/espo/credential.ts`: `EspoCredential` (discriminated union: `apiKey` | `espoAuthorization`) → request headers via `credentialHeaders`. `espoAuthorizationCredential(username, secret)` builds the `base64(username:secret)` value the OAuth login and refresh reuse.
 - `src/espo/metadata.ts`: `MetadataService` caches `/Metadata` **per base URL** with `ESPOCRM_METADATA_TTL`. Metadata is instance schema (not user data), so the cache is shared across callers safely.
 
 ### Conventions in this codebase
@@ -95,4 +96,4 @@ One place classifies EspoCRM field types into three renderings, kept in lockstep
 
 ## Configuration
 
-All config is environment variables, parsed and validated in `src/config.ts` (see `.env.example` / the README table). Notable rules enforced there: `apiKey` mode requires `ESPOCRM_API_KEY`; `passthrough` mode requires `http` transport (no per-request headers over stdio).
+All config is environment variables, parsed and validated in `src/config.ts` (see `.env.example` / the README table). Notable rules enforced there: `apiKey` mode requires `ESPOCRM_API_KEY`; `oauth` mode requires `http` transport, `MCP_OAUTH_ISSUER_URL`, and a 32-byte `MCP_OAUTH_ENCRYPTION_KEY` (validated via `decodeKey`).

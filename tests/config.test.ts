@@ -5,16 +5,24 @@ import { ConfigError } from "../src/errors.js";
 
 const MINIMAL = { ESPOCRM_BASE_URL: "https://crm.example.test", ESPOCRM_API_KEY: "key" };
 
+const OAUTH_ENV = {
+  ESPOCRM_BASE_URL: "https://crm.example.test",
+  ESPOCRM_AUTH_MODE: "oauth",
+  MCP_TRANSPORT: "http",
+  MCP_OAUTH_ISSUER_URL: "https://mcp.example.test",
+  MCP_OAUTH_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
+};
+
 test("loadConfig applies documented defaults", () => {
   const config = loadConfig(MINIMAL);
   assert.equal(config.authMode, "apiKey");
-  assert.equal(config.passthroughAs, "apiKey");
   assert.equal(config.transport, "stdio");
   assert.equal(config.httpPort, 3000);
   assert.equal(config.httpPath, "/mcp");
   assert.equal(config.readOnly, true);
   assert.deepEqual(config.entityTypes, ["Lead", "Contact", "Account", "Opportunity"]);
   assert.equal(config.metadataTtlSeconds, 300);
+  assert.equal(config.accessTokenTtlSeconds, 3600);
 });
 
 test("loadConfig strips a trailing slash from the base URL", () => {
@@ -30,25 +38,33 @@ test("loadConfig requires an apiKey in apiKey auth mode", () => {
   assert.throws(() => loadConfig({ ESPOCRM_BASE_URL: "https://crm.example.test" }), ConfigError);
 });
 
-test("loadConfig rejects passthrough auth over the stdio transport", () => {
-  assert.throws(
-    () => loadConfig({ ...MINIMAL, ESPOCRM_AUTH_MODE: "passthrough", MCP_TRANSPORT: "stdio" }),
-    ConfigError,
-  );
+test("loadConfig accepts oauth auth over http without an apiKey", () => {
+  const config = loadConfig(OAUTH_ENV);
+  assert.equal(config.authMode, "oauth");
+  assert.equal(config.apiKey, undefined);
+  assert.equal(config.oauthIssuerUrl, "https://mcp.example.test");
 });
 
-test("loadConfig allows passthrough auth over http without an apiKey", () => {
-  const config = loadConfig({
-    ESPOCRM_BASE_URL: "https://crm.example.test",
-    ESPOCRM_AUTH_MODE: "passthrough",
-    MCP_TRANSPORT: "http",
-  });
-  assert.equal(config.authMode, "passthrough");
-  assert.equal(config.apiKey, undefined);
+test("loadConfig rejects oauth auth over the stdio transport", () => {
+  assert.throws(() => loadConfig({ ...OAUTH_ENV, MCP_TRANSPORT: "stdio" }), ConfigError);
+});
+
+test("loadConfig rejects oauth auth without an issuer URL", () => {
+  const { MCP_OAUTH_ISSUER_URL, ...withoutIssuer } = OAUTH_ENV;
+  assert.throws(() => loadConfig(withoutIssuer), ConfigError);
+});
+
+test("loadConfig rejects oauth auth without an encryption key", () => {
+  const { MCP_OAUTH_ENCRYPTION_KEY, ...withoutKey } = OAUTH_ENV;
+  assert.throws(() => loadConfig(withoutKey), ConfigError);
+});
+
+test("loadConfig rejects an oauth encryption key that is not 32 bytes", () => {
+  assert.throws(() => loadConfig({ ...OAUTH_ENV, MCP_OAUTH_ENCRYPTION_KEY: "too-short" }), ConfigError);
 });
 
 test("loadConfig rejects an out-of-range enum value", () => {
-  assert.throws(() => loadConfig({ ...MINIMAL, ESPOCRM_AUTH_MODE: "oauth" }), ConfigError);
+  assert.throws(() => loadConfig({ ...MINIMAL, ESPOCRM_AUTH_MODE: "passthrough" }), ConfigError);
   assert.throws(() => loadConfig({ ...MINIMAL, MCP_TRANSPORT: "grpc" }), ConfigError);
 });
 
