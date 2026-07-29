@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Config } from "../config.js";
 import { ConfigError } from "../errors.js";
 
@@ -12,6 +13,12 @@ export function credentialHeaders(credential: EspoCredential): Record<string, st
     case "espoAuthorization":
       return { "Espo-Authorization": credential.value };
   }
+}
+
+// A one-way digest that identifies a caller for per-user caching without ever
+// holding on to the credential itself.
+export function credentialFingerprint(credential: EspoCredential): string {
+  return createHash("sha256").update(JSON.stringify(credentialHeaders(credential))).digest("hex");
 }
 
 export function credentialFromConfig(config: Config): EspoCredential {

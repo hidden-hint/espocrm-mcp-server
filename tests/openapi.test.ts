@@ -20,6 +20,18 @@ test("buildOpenApiDocument types entity schemas from live metadata plus StreamNo
   assert.deepEqual(doc.components.schemas.Lead.required, ["status"]);
 });
 
+test("buildOpenApiDocument documents renamed option labels on both the record and the write body", async () => {
+  const { context } = createContext({});
+  const doc = (await buildOpenApiDocument(context, makeConfig({ entityTypes: ["Lead"], readOnly: false }))) as any;
+  assert.deepEqual(doc.components.schemas.Lead.properties.status, {
+    type: "string",
+    enum: ["New", "Assigned", "Dead"],
+    description: 'UI labels: "Backlog" = New, "In Talks" = Assigned.',
+  });
+  const body = doc.paths["/Lead"].post.requestBody.content["application/json"].schema;
+  assert.match(body.properties.status.description, /"In Talks" = Assigned\. Either form is accepted\./);
+});
+
 test("buildOpenApiDocument emits search, item, and stream paths per entity", async () => {
   const { context } = createContext({});
   const doc = (await buildOpenApiDocument(context, makeConfig({ entityTypes: ["Lead"] }))) as any;

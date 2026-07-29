@@ -8,7 +8,8 @@ export function describeEntityTool(context: ToolContext): ToolDef {
     title: "Describe entity",
     description:
       "Return the fields (with types and enum options) and relationships of an EspoCRM entity type. " +
-      "Use this to learn valid attribute names and values before searching or reading records.",
+      "Use this to learn valid attribute names and values before searching or reading records. Options renamed " +
+      "in the EspoCRM UI also carry 'optionLabels', mapping each stored value to the label users see for it.",
     inputSchema: {
       entityType: z.string().describe("Entity type name, e.g. 'Lead'. Get valid values from list_entity_types."),
     },

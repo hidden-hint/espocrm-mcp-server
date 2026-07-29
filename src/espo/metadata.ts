@@ -1,6 +1,7 @@
 import { EspoApiError } from "../errors.js";
 import { pruneUndefined } from "../util.js";
 import type { EspoClient } from "./client.js";
+import type { EntityOptionLabels, LabelService } from "./labels.js";
 
 export interface EntityTypeInfo {
   entityType: string;
@@ -27,6 +28,7 @@ export class MetadataService {
   constructor(
     private readonly client: EspoClient,
     private readonly ttlSeconds: number,
+    private readonly labels: LabelService,
   ) {}
 
   async listEntityTypes(): Promise<EntityTypeInfo[]> {
@@ -47,12 +49,18 @@ export class MetadataService {
 
     return {
       entityType,
-      fields: this.describeFields(definition.fields as Record<string, Record<string, unknown>> | undefined),
+      fields: this.describeFields(
+        definition.fields as Record<string, Record<string, unknown>> | undefined,
+        await this.labels.optionLabels(entityType),
+      ),
       links: this.describeLinks(definition.links as Record<string, Record<string, unknown>> | undefined),
     };
   }
 
-  private describeFields(fields: Record<string, Record<string, unknown>> | undefined): EntityDescription["fields"] {
+  private describeFields(
+    fields: Record<string, Record<string, unknown>> | undefined,
+    optionLabels: EntityOptionLabels,
+  ): EntityDescription["fields"] {
     return Object.fromEntries(
       Object.entries(fields ?? {}).map(([name, field]) => [
         name,
@@ -60,6 +68,7 @@ export class MetadataService {
           type: field.type,
           required: field.required === true ? true : undefined,
           options: field.options,
+          optionLabels: optionLabels[name],
         }),
       ]),
     );

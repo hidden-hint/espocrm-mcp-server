@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ConfigError } from "../../src/errors.js";
 import {
+  credentialFingerprint,
   credentialFromConfig,
   credentialHeaders,
   espoAuthorizationCredential,
@@ -25,6 +26,19 @@ test("credentialFromConfig returns the configured apiKey", () => {
 test("credentialFromConfig throws when the apiKey is missing or empty", () => {
   assert.throws(() => credentialFromConfig(makeConfig({ apiKey: undefined })), ConfigError);
   assert.throws(() => credentialFromConfig(makeConfig({ apiKey: "" })), ConfigError);
+});
+
+test("credentialFingerprint is stable for the same credential and distinct across credentials", () => {
+  const fingerprint = credentialFingerprint({ kind: "apiKey", apiKey: "secret" });
+  assert.equal(fingerprint, credentialFingerprint({ kind: "apiKey", apiKey: "secret" }));
+  assert.notEqual(fingerprint, credentialFingerprint({ kind: "apiKey", apiKey: "other" }));
+  assert.notEqual(fingerprint, credentialFingerprint({ kind: "espoAuthorization", value: "secret" }));
+});
+
+test("credentialFingerprint does not leak the credential it fingerprints", () => {
+  const fingerprint = credentialFingerprint({ kind: "apiKey", apiKey: "secret" });
+  assert.match(fingerprint, /^[0-9a-f]{64}$/);
+  assert.ok(!fingerprint.includes("secret"));
 });
 
 test("espoAuthorizationCredential base64-encodes username:secret into an Espo-Authorization value", () => {

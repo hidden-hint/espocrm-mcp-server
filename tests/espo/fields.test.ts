@@ -1,7 +1,25 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { z } from "zod";
 import type { FieldMap } from "../../src/espo/fields.js";
 import { buildFilters, entityObjectSchema, writableFields } from "../../src/espo/fields.js";
+
+// Unwraps the optional / label-normalizing wrappers a param schema may carry to
+// assert on the set of values the JSON Schema will actually offer the model.
+function enumValues(schema: z.ZodTypeAny): string[] {
+  if (schema instanceof z.ZodOptional) {
+    return enumValues(schema.unwrap() as z.ZodTypeAny);
+  }
+  if (schema instanceof z.ZodEffects) {
+    return enumValues(schema.innerType() as z.ZodTypeAny);
+  }
+  if (schema instanceof z.ZodArray) {
+    return enumValues(schema.element as z.ZodTypeAny);
+  }
+  assert.ok(schema instanceof z.ZodEnum, "expected an enum schema");
+
+  return (schema as z.ZodEnum<[string, ...string[]]>).options;
+}
 
 const LEAD_FIELDS: FieldMap = {
   name: { type: "varchar" },
@@ -20,6 +38,18 @@ const LEAD_FIELDS: FieldMap = {
   computedScore: { type: "int", readOnly: true },
   internalCode: { type: "varchar", notStorable: true },
   mystery: { type: "unmapped" },
+};
+
+// EspoCRM's Label Manager renames the *labels* of enum options while the stored
+// values stay untouched, so "In Talks" is what a user sees for the value "Assigned".
+const TRANSLATED_FIELDS: FieldMap = {
+  status: {
+    type: "enum",
+    options: ["New", "Assigned", "Dead"],
+    required: true,
+    optionLabels: { New: "Backlog", Assigned: "In Talks" },
+  },
+  tags: { type: "multiEnum", options: ["hot", "cold"], optionLabels: { hot: "Burning" } },
 };
 
 test("buildFilters emits typed params for enum, bool, link, and range fields", () => {
@@ -101,6 +131,39 @@ test("buildFilters prioritizes enum/bool/link over numeric ranges when capping",
   assert.ok(keys.includes("priorityEnum"));
 });
 
+test("an enum filter documents the UI label of every renamed option", () => {
+  const description = buildFilters(TRANSLATED_FIELDS).params.status?.description ?? "";
+  assert.match(description, /"Backlog" = New/);
+  assert.match(description, /"In Talks" = Assigned/);
+  assert.ok(!description.includes("Dead"), "untranslated options need no label note");
+});
+
+test("an enum filter still exposes only the stored values as its allowed set", () => {
+  const status = buildFilters(TRANSLATED_FIELDS).params.status!;
+  assert.deepEqual(enumValues(status), ["New", "Assigned", "Dead"]);
+});
+
+test("an enum filter accepts a UI label and normalizes it to the stored value", () => {
+  const status = buildFilters(TRANSLATED_FIELDS).params.status!;
+  assert.equal(status.parse("In Talks"), "Assigned");
+  assert.equal(status.parse("Assigned"), "Assigned");
+  assert.throws(() => status.parse("Nonexistent"));
+});
+
+test("an untranslated enum filter carries no label note", () => {
+  assert.equal(buildFilters(LEAD_FIELDS).params.status?.description, "Filter by status.");
+});
+
+test("a UI label that collides with another option's stored value is not treated as an alias", () => {
+  const fields: FieldMap = { stage: { type: "enum", options: ["A", "B"], optionLabels: { A: "B" } } };
+  assert.equal(buildFilters(fields).params.stage?.parse("B"), "B");
+});
+
+test("a UI label shared by two options is not treated as an alias", () => {
+  const fields: FieldMap = { stage: { type: "enum", options: ["A", "B"], optionLabels: { A: "Same", B: "Same" } } };
+  assert.throws(() => buildFilters(fields).params.stage?.parse("Same"));
+});
+
 test("writableFields skips audit, readOnly, notStorable, and unmapped fields", () => {
   const names = writableFields(LEAD_FIELDS).map((spec) => spec.name);
   for (const excluded of ["id", "createdAt", "computedScore", "internalCode", "mystery"]) {
@@ -138,6 +201,46 @@ test("writableFields maps scalar and formatted types to JSON Schema", () => {
   assert.deepEqual(json("doNotCall"), { type: "boolean" });
   assert.deepEqual(json("birthday"), { type: "string", format: "date" });
   assert.deepEqual(json("tags"), { type: "array", items: { type: "string", enum: ["hot", "cold"] } });
+});
+
+test("writableFields documents UI labels while keeping stored values in the JSON Schema enum", () => {
+  const status = writableFields(TRANSLATED_FIELDS).find((spec) => spec.name === "status")!;
+  assert.deepEqual(status.json, {
+    type: "string",
+    enum: ["New", "Assigned", "Dead"],
+    description: 'UI labels: "Backlog" = New, "In Talks" = Assigned. Either form is accepted.',
+  });
+  assert.deepEqual(enumValues(status.zod), ["New", "Assigned", "Dead"]);
+});
+
+test("a write field accepts a UI label and normalizes it to the stored value", () => {
+  const status = writableFields(TRANSLATED_FIELDS).find((spec) => spec.name === "status")!;
+  assert.equal(status.zod.parse("In Talks"), "Assigned");
+  assert.equal(status.zod.parse("Dead"), "Dead");
+});
+
+test("a multiEnum write field accepts UI labels for its items", () => {
+  const tags = writableFields(TRANSLATED_FIELDS).find((spec) => spec.name === "tags")!;
+  assert.deepEqual(tags.zod.parse(["Burning", "cold"]), ["hot", "cold"]);
+  assert.deepEqual(tags.json, {
+    type: "array",
+    items: { type: "string", enum: ["hot", "cold"] },
+    description: 'UI labels: "Burning" = hot. Either form is accepted.',
+  });
+});
+
+test("an untranslated write field carries no label description", () => {
+  const specs = writableFields(LEAD_FIELDS);
+  assert.equal(specs.find((spec) => spec.name === "status")?.zod.description, undefined);
+});
+
+test("entityObjectSchema documents UI labels on a translated enum property", () => {
+  const schema = entityObjectSchema(TRANSLATED_FIELDS) as { properties: Record<string, unknown> };
+  assert.deepEqual(schema.properties.status, {
+    type: "string",
+    enum: ["New", "Assigned", "Dead"],
+    description: 'UI labels: "Backlog" = New, "In Talks" = Assigned.',
+  });
 });
 
 test("entityObjectSchema always includes an id and lists required fields", () => {

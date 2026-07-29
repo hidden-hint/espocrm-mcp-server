@@ -7,7 +7,7 @@ Because it talks only to the REST API, it is not a derivative of the AGPL-licens
 ## Design
 
 - **Stateless per-user auth.** In `oauth` mode the server stores no EspoCRM credential and keeps no session store. Each caller logs in with their own EspoCRM username/password and every request carries a token that *contains* that user's (encrypted) EspoCRM credential; the server unwraps it and EspoCRM enforces **that user's ACL**. A sales rep sees exactly their own leads — the same slice they'd see in the web UI.
-- **Metadata-driven.** Entity types, fields, and enum options are read from `/api/v1/Metadata` at runtime, so the generic tools adapt to any instance's custom entities and fields.
+- **Metadata-driven.** Entity types, fields, and enum options are read from `/api/v1/Metadata` at runtime, so the generic tools adapt to any instance's custom entities and fields. Options renamed in EspoCRM's Label Manager are reconciled with `/api/v1/I18n`, so a status the UI calls "In Talks" is documented as such and accepted by that name, while the stored value (`Assigned`) is what reaches the API.
 - **Two transports.** `stdio` for local single-user use; Streamable HTTP (with built-in OAuth 2.1) for a shared, containerized deployment.
 
 ## Tools
@@ -19,7 +19,7 @@ Search and fetch tools are **generated per entity type** from the `MCP_ENTITY_TY
 | Tool | Description |
 |------|-------------|
 | `list_entity_types` | Discover the entity types on the instance |
-| `describe_entity` | Fields (types, enum options) and relationships of an entity |
+| `describe_entity` | Fields (types, enum options, their UI labels) and relationships of an entity |
 | `get_stream` | A record's activity stream (posts, emails, status changes) |
 
 **Per entity** (for each type in `MCP_ENTITY_TYPES`; default `Lead, Contact, Account, Opportunity`)
@@ -31,7 +31,7 @@ Search and fetch tools are **generated per entity type** from the `MCP_ENTITY_TY
 
 Each `search_<entity>` exposes the entity's high-signal fields as typed parameters, derived from `/Metadata` at runtime:
 
-- **enum** fields → a parameter constrained to the actual options (e.g. `status: "New" | "Assigned" | …`)
+- **enum** fields → a parameter constrained to the actual options (e.g. `status: "New" | "Assigned" | …`); where the Label Manager renames an option, the parameter documents the mapping (`"In Talks" = Assigned`) and accepts either form
 - **bool** fields → a boolean parameter
 - **link** fields → a `<field>Id` string parameter
 - **date / datetime / number / currency** fields → `<field>From` / `<field>To` range parameters
@@ -235,7 +235,7 @@ curl -i -X POST https://mcp.crm.example.com/mcp -d '{}' -H 'Content-Type: applic
 | `MCP_HTTP_PATH` | `/mcp` | HTTP endpoint path |
 | `MCP_READ_ONLY` | `true` | Set `false` to register write tools (`create`/`update`/`delete`/`post_to_stream`) |
 | `MCP_ENTITY_TYPES` | `Lead,Contact,Account,Opportunity` | Entity types exposed as dedicated `search_<entity>` / `get_<entity>` tools |
-| `ESPOCRM_METADATA_TTL` | `300` | Metadata cache lifetime (seconds) |
+| `ESPOCRM_METADATA_TTL` | `300` | Metadata and option-label cache lifetime (seconds) |
 
 See [Authentication](#authentication) for how the modes and the OAuth flow work.
 

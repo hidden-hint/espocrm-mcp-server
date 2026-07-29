@@ -74,6 +74,22 @@ test("getMetadata issues a GET to /api/v1/Metadata", async () => {
   assert.equal(calls[0]!.url.pathname, "/api/v1/Metadata");
 });
 
+test("getI18n issues a GET to /api/v1/I18n", async () => {
+  const { calls } = stubFetch({ ok: true, status: 200, body: "{}" });
+  await new EspoClient("https://crm.example.test", CRED).getI18n();
+  assert.equal(calls[0]!.method, "GET");
+  assert.equal(calls[0]!.url.pathname, "/api/v1/I18n");
+});
+
+test("the client exposes a fingerprint of its credential for per-caller caching", () => {
+  const client = new EspoClient("https://crm.example.test", CRED);
+  assert.equal(client.credentialFingerprint, new EspoClient("https://other.example.test", CRED).credentialFingerprint);
+  assert.notEqual(
+    client.credentialFingerprint,
+    new EspoClient("https://crm.example.test", { kind: "apiKey", apiKey: "other" }).credentialFingerprint,
+  );
+});
+
 test("getAppUser issues a GET to /api/v1/App/user carrying the credential", async () => {
   const { calls } = stubFetch({ ok: true, status: 200, body: JSON.stringify({ token: "auth-token" }) });
   const result = await new EspoClient("https://crm.example.test", {
