@@ -40,6 +40,40 @@ test("buildServer registers write tools when writes are enabled", async () => {
   }
 });
 
+test("a tool schema offers the stored enum values and documents their UI labels", async () => {
+  const { client, close } = await connectClient({ entityTypes: ["Lead"], readOnly: false }, {});
+  try {
+    const update = (await client.listTools()).tools.find((tool) => tool.name === "update_lead")!;
+    const status = (update.inputSchema.properties as Record<string, { enum: string[]; description: string }>).status!;
+    assert.deepEqual(status.enum, ["New", "Assigned", "Dead"]);
+    assert.match(status.description, /"In Talks" = Assigned/);
+  } finally {
+    await close();
+  }
+});
+
+test("a tool call naming an option by its UI label writes the stored value", async () => {
+  const { client, calls, close } = await connectClient({ entityTypes: ["Lead"], readOnly: false }, {});
+  try {
+    await client.callTool({ name: "update_lead", arguments: { id: "l1", status: "In Talks" } });
+    const [, , body] = calls.at(-1)!.args as [string, string, Record<string, unknown>];
+    assert.deepEqual(body, { status: "Assigned" });
+  } finally {
+    await close();
+  }
+});
+
+test("a search filtering by a UI label queries the stored value", async () => {
+  const { client, calls, close } = await connectClient({ entityTypes: ["Lead"], readOnly: true }, {});
+  try {
+    await client.callTool({ name: "search_lead", arguments: { status: "In Talks" } });
+    const params = (calls.at(-1)!.args as [string, Record<string, unknown>])[1];
+    assert.deepEqual(params.where, [{ type: "equals", attribute: "status", value: "Assigned" }]);
+  } finally {
+    await close();
+  }
+});
+
 test("a registered tool executes end-to-end through the MCP transport", async () => {
   const { client, calls, close } = await connectClient(
     { entityTypes: ["Lead"], readOnly: true },

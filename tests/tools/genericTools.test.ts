@@ -23,7 +23,17 @@ test("describe_entity returns the pruned field and link description", async () =
   const result = await describeEntityTool(context).handler({ entityType: "Lead" });
   const description = parse(result);
   assert.equal(description.entityType, "Lead");
-  assert.deepEqual(description.fields.status, { type: "enum", required: true, options: ["New", "Assigned", "Dead"] });
+  assert.deepEqual(description.fields.status, {
+    type: "enum",
+    required: true,
+    options: ["New", "Assigned", "Dead"],
+    optionLabels: { New: "Backlog", Assigned: "In Talks" },
+  });
+});
+
+test("describe_entity tells the caller that optionLabels map stored values to UI labels", async () => {
+  const { context } = createContext({});
+  assert.match(describeEntityTool(context).description, /optionLabels/);
 });
 
 test("describe_entity surfaces an unknown entity as a tool error", async () => {

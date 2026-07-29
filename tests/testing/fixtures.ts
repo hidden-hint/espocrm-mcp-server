@@ -1,5 +1,6 @@
 import type { Config } from "../../src/config.js";
 import type { EspoClient, ListResult } from "../../src/espo/client.js";
+import { LabelService } from "../../src/espo/labels.js";
 import { MetadataService } from "../../src/espo/metadata.js";
 import type { ToolContext } from "../../src/tools/types.js";
 
@@ -35,6 +36,7 @@ export interface FakeClientResponses {
   update: Record<string, unknown>;
   deleteRecord: unknown;
   metadata: Record<string, unknown>;
+  i18n: Record<string, unknown>;
 }
 
 export interface FakeClient {
@@ -51,6 +53,7 @@ const DEFAULT_RESPONSES: FakeClientResponses = {
   update: { id: "updated-1" },
   deleteRecord: null,
   metadata: {},
+  i18n: {},
 };
 
 let baseUrlSequence = 0;
@@ -77,10 +80,12 @@ export function createFakeClient(
 
   const client = {
     baseUrl,
+    credentialFingerprint: `fingerprint-of-${baseUrl}`,
     find: record("find", () => responses.find),
     getRecord: record("getRecord", () => responses.getRecord),
     getStream: record("getStream", () => responses.getStream),
     getMetadata: record("getMetadata", () => responses.metadata),
+    getI18n: record("getI18n", () => responses.i18n),
     create: record("create", () => responses.create),
     update: record("update", () => responses.update),
     deleteRecord: record("deleteRecord", () => responses.deleteRecord),
@@ -95,10 +100,14 @@ export function createContext(overrides: Partial<FakeClientResponses>): {
 } {
   const { client, calls } = createFakeClient(uniqueBaseUrl(), {
     metadata: SAMPLE_METADATA,
+    i18n: SAMPLE_I18N,
     ...overrides,
   });
 
-  return { context: { espo: client, metadata: new MetadataService(client, 300) }, calls };
+  return {
+    context: { espo: client, metadata: new MetadataService(client, 300, new LabelService(client, 300)) },
+    calls,
+  };
 }
 
 // A representative EspoCRM /Metadata payload covering every field rendering the
@@ -148,4 +157,19 @@ export const SAMPLE_METADATA: Record<string, unknown> = {
       links: {},
     },
   },
+};
+
+// A representative EspoCRM /I18n payload: Lead's stock status options renamed in
+// the Label Manager (with one label left identical to its stored value), and an
+// entity with no option translations at all.
+export const SAMPLE_I18N: Record<string, unknown> = {
+  Global: { scopeNames: { Lead: "Lead" } },
+  Lead: {
+    fields: { status: "Status" },
+    options: {
+      status: { New: "Backlog", Assigned: "In Talks", Dead: "Dead" },
+      tags: { hot: "Burning" },
+    },
+  },
+  Contact: { fields: { name: "Name" } },
 };

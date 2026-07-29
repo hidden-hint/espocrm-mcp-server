@@ -52,7 +52,7 @@ An MCP server that projects any EspoCRM instance to MCP clients over EspoCRM's *
 Two invariants drive the whole design; preserve them:
 
 1. **Stateless per-user auth.** The server holds no privileged key in `oauth` mode and keeps no session store. Each caller logs in against EspoCRM and receives an encrypted, self-contained token that *carries* their EspoCRM credential (sealed with `MCP_OAUTH_ENCRYPTION_KEY`); `verifyAccessToken` unwraps it per request and EspoCRM enforces *that user's* ACL. There is no server-side authorization logic to add — never introduce shared state or a super-key that would bypass this, and never persist the unwrapped credential.
-2. **Metadata is the single source of truth.** Search filters, write-tool inputs, and the OpenAPI schema are all generated from the same field mapping in `src/espo/fields.ts`. When you touch how a field type maps to a parameter/schema, change it there so tools and spec cannot drift.
+2. **Metadata is the single source of truth.** Search filters, write-tool inputs, and the OpenAPI schema are all generated from the same field mapping in `src/espo/fields.ts`. When you touch how a field type maps to a parameter/schema, change it there so tools and spec cannot drift. Option *labels* are the one thing `/Metadata` does not carry — they come from `/I18n` (see `src/espo/labels.ts`) and are merged into the field definitions by `MetadataService.describeEntity`, so `fields.ts` stays the only place that renders them.
 
 ### Request flow
 
@@ -75,6 +75,7 @@ Two invariants drive the whole design; preserve them:
 
 One place classifies EspoCRM field types into three renderings, kept in lockstep:
 
+- Renamed enum options (`optionLabels`, joined in by `MetadataService`) are rendered in two ways at once: the JSON Schema `enum` keeps only the **stored values**, while the description spells out the mapping (`"In Talks" = Assigned`) and a `z.preprocess` step normalizes a label back to its value on input. A label is only accepted as an alias when it is unambiguous — never when it collides with another option's stored value or label.
 - `buildFilters` → zod params + `where`-condition translator for **search** tools. Text fields are excluded (covered by `textFilter`); typed filters capped at `MAX_TYPED_FILTERS` (25), prioritized by `FILTERABLE_PRIORITY` (enum > bool > link > date > number). enum→constrained param, bool→boolean, link→`<field>Id`, date/number→`<field>From`/`<field>To` ranges. `RESERVED` names must not be shadowed by a field.
 - `writableFields` → zod schema **and** JSON Schema per settable field for **write** tools + OpenAPI bodies. Skips `id`, audit fields, and anything `readOnly`/`notStorable`.
 - `entityObjectSchema` → OpenAPI response schema for a record.
@@ -86,7 +87,8 @@ One place classifies EspoCRM field types into three renderings, kept in lockstep
 - `src/espo/client.ts`: thin `fetch` wrapper over `/api/v1/`. Credential headers only.
 - `src/espo/query.ts` `applyQuery`: serializes nested params into EspoCRM's PHP bracket notation (`where[0][type]=equals`). Any query param object goes through here.
 - `src/espo/credential.ts`: `EspoCredential` (discriminated union: `apiKey` | `espoAuthorization`) → request headers via `credentialHeaders`. `espoAuthorizationCredential(username, secret)` builds the `base64(username:secret)` value the OAuth login and refresh reuse.
-- `src/espo/metadata.ts`: `MetadataService` caches `/Metadata` **per base URL** with `ESPOCRM_METADATA_TTL`. Metadata is instance schema (not user data), so the cache is shared across callers safely.
+- `src/espo/metadata.ts`: `MetadataService` caches `/Metadata` **per base URL** with `ESPOCRM_METADATA_TTL`. Metadata is instance schema (not user data), so the cache is shared across callers safely. It composes a `LabelService` and joins its option labels onto each field description (`optionLabels`).
+- `src/espo/labels.ts`: `LabelService` reads `/I18n` for the labels EspoCRM's Label Manager puts on enum options (a `status` stored as `Assigned` may display as "In Talks"). That document is ACL-filtered and localized per user, so it is cached **per base URL *and* credential fingerprint** — never shared between callers — with the same TTL. A failing `/I18n` is logged and cached as "no labels": labels are a convenience, never a hard dependency.
 
 ### Conventions in this codebase
 

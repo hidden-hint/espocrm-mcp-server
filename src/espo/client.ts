@@ -1,5 +1,5 @@
 import { EspoApiError } from "../errors.js";
-import { credentialHeaders, type EspoCredential } from "./credential.js";
+import { credentialFingerprint, credentialHeaders, type EspoCredential } from "./credential.js";
 import { applyQuery } from "./query.js";
 
 export interface ListResult<T = Record<string, unknown>> {
@@ -11,10 +11,12 @@ type QueryParams = Record<string, unknown>;
 
 export class EspoClient {
   readonly baseUrl: string;
+  readonly credentialFingerprint: string;
   private readonly credential: EspoCredential;
 
   constructor(baseUrl: string, credential: EspoCredential) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
+    this.credentialFingerprint = credentialFingerprint(credential);
     this.credential = credential;
   }
 
@@ -32,6 +34,10 @@ export class EspoClient {
 
   getMetadata(): Promise<Record<string, unknown>> {
     return this.request("GET", "Metadata", {});
+  }
+
+  getI18n(): Promise<Record<string, unknown>> {
+    return this.request("GET", "I18n", {});
   }
 
   getAppUser(): Promise<Record<string, unknown>> {

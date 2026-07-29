@@ -50,6 +50,76 @@ function stringOptions(options: unknown): string[] {
   return Array.isArray(options) ? options.filter((option): option is string => typeof option === "string" && option !== "") : [];
 }
 
+// Option values renamed in EspoCRM's Label Manager: the label is what users (and
+// therefore prompts) call the option, while the API still speaks the stored value.
+type OptionLabels = Record<string, string>;
+
+function optionLabels(definition: Record<string, unknown>): OptionLabels {
+  const labels = definition.optionLabels;
+  if (typeof labels !== "object" || labels === null) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(labels).filter(
+      ([value, label]) => typeof label === "string" && label !== "" && label !== value,
+    ),
+  ) as OptionLabels;
+}
+
+function labelDescription(options: string[], labels: OptionLabels): string {
+  const pairs = options
+    .filter((option) => labels[option] !== undefined)
+    .map((option) => `"${labels[option]}" = ${option}`);
+
+  return pairs.length === 0 ? "" : `UI labels: ${pairs.join(", ")}.`;
+}
+
+// Inputs take either form; the value is what reaches EspoCRM.
+function inputLabelDescription(options: string[], labels: OptionLabels): string {
+  const described = labelDescription(options, labels);
+
+  return described === "" ? "" : `${described} Either form is accepted.`;
+}
+
+// A label only stands in for its value when it is unambiguous: labels that
+// duplicate another option's stored value or another option's label are dropped.
+function valuesByLabel(options: string[], labels: OptionLabels): Record<string, string> {
+  const labelled = options.filter((option) => labels[option] !== undefined);
+  const unambiguous = labelled.filter(
+    (option) =>
+      !options.includes(labels[option]!) &&
+      labelled.every((other) => other === option || labels[other] !== labels[option]),
+  );
+
+  return Object.fromEntries(unambiguous.map((option) => [labels[option]!, option]));
+}
+
+function enumSchema(options: string[], labels: OptionLabels): z.ZodTypeAny {
+  const values = z.enum(options as [string, ...string[]]);
+  const byLabel = valuesByLabel(options, labels);
+  if (Object.keys(byLabel).length === 0) {
+    return values;
+  }
+
+  return z.preprocess(
+    (input) => (typeof input === "string" && byLabel[input] !== undefined ? byLabel[input] : input),
+    values,
+  );
+}
+
+function describedSchema(schema: z.ZodTypeAny, note: string): z.ZodTypeAny {
+  return note === "" ? schema : schema.describe(note);
+}
+
+function describedJson(json: Record<string, unknown>, note: string): Record<string, unknown> {
+  return note === "" ? json : { ...json, description: note };
+}
+
+function sentences(...parts: string[]): string {
+  return parts.filter((part) => part !== "").join(" ");
+}
+
 function rangeContribution(name: string, makeSchema: () => z.ZodTypeAny, unit: string): Contribution | null {
   const from = `${name}From`;
   const to = `${name}To`;
@@ -85,9 +155,14 @@ function contributionFor(name: string, definition: Record<string, unknown>): Con
       if (options.length === 0 || RESERVED.has(name)) {
         return null;
       }
+      const labels = optionLabels(definition);
 
       return {
-        params: { [name]: z.enum(options as [string, ...string[]]).optional().describe(`Filter by ${name}.`) },
+        params: {
+          [name]: enumSchema(options, labels)
+            .optional()
+            .describe(sentences(`Filter by ${name}.`, inputLabelDescription(options, labels))),
+        },
         build: (args) => (args[name] === undefined ? [] : [{ type: "equals", attribute: name, value: args[name] }]),
       };
     }
@@ -197,16 +272,30 @@ function writeSpecFor(name: string, definition: Record<string, unknown>): WriteF
       if (options.length === 0) {
         return { name, required, zod: z.string(), json: { type: "string" } };
       }
+      const labels = optionLabels(definition);
+      const note = inputLabelDescription(options, labels);
 
-      return { name, required, zod: z.enum(options as [string, ...string[]]), json: { type: "string", enum: options } };
+      return {
+        name,
+        required,
+        zod: describedSchema(enumSchema(options, labels), note),
+        json: describedJson({ type: "string", enum: options }, note),
+      };
     }
     case "multiEnum":
     case "array": {
       const options = stringOptions(definition.options);
-      const itemZod = options.length === 0 ? z.string() : z.enum(options as [string, ...string[]]);
+      const labels = optionLabels(definition);
+      const note = inputLabelDescription(options, labels);
+      const itemZod = options.length === 0 ? z.string() : enumSchema(options, labels);
       const itemJson = options.length === 0 ? { type: "string" } : { type: "string", enum: options };
 
-      return { name, required, zod: z.array(itemZod), json: { type: "array", items: itemJson } };
+      return {
+        name,
+        required,
+        zod: describedSchema(z.array(itemZod), note),
+        json: describedJson({ type: "array", items: itemJson }, note),
+      };
     }
     case "bool":
       return { name, required, zod: z.boolean(), json: { type: "boolean" } };
@@ -280,8 +369,16 @@ function fieldProperties(name: string, definition: Record<string, unknown>): Rec
       return { [name]: { type: "string", format: "email" } };
     case "enum": {
       const options = stringOptions(definition.options);
+      if (options.length === 0) {
+        return { [name]: { type: "string" } };
+      }
 
-      return { [name]: options.length === 0 ? { type: "string" } : { type: "string", enum: options } };
+      return {
+        [name]: describedJson(
+          { type: "string", enum: options },
+          labelDescription(options, optionLabels(definition)),
+        ),
+      };
     }
     case "bool":
       return { [name]: { type: "boolean" } };
