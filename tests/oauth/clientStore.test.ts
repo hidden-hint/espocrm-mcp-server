@@ -12,13 +12,13 @@ function fullClient(clientId: string): OAuthClientInformationFull {
   }
 }
 
-test("registerClient stores a client that getClient then returns", () => {
-  const store = new InMemoryClientStore()
-  const registered = store.registerClient(fullClient("client-1"))
+test("registerClient stores a client that getClient then returns", (): void => {
+  const store: InMemoryClientStore = new InMemoryClientStore()
+  const registered: OAuthClientInformationFull = store.registerClient(fullClient("client-1"))
   assert.equal(registered.client_id, "client-1")
   assert.deepEqual(store.getClient("client-1"), fullClient("client-1"))
 })
 
-test("getClient returns undefined for an unknown client id", () => {
+test("getClient returns undefined for an unknown client id", (): void => {
   assert.equal(new InMemoryClientStore().getClient("nope"), undefined)
 })

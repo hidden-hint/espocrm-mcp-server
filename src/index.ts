@@ -6,15 +6,16 @@ import { buildOpenApiDocument } from "./openapi.js"
 import { runHttp } from "./transport/http.js"
 import { runStdio } from "./transport/stdio.js"
 import { SERVER_NAME, VERSION } from "./version.js"
+import type { Config } from "./config.js"
 
 async function printOpenApi(): Promise<void> {
-  const config = loadConfig(process.env)
-  const document = await buildOpenApiDocument(contextFromConfig(config), config)
+  const config: Config = loadConfig(process.env)
+  const document: { [x: string]: unknown } = await buildOpenApiDocument(contextFromConfig(config), config)
   process.stdout.write(`${JSON.stringify(document, null, 2)}\n`)
 }
 
 async function run(): Promise<void> {
-  const config = loadConfig(process.env)
+  const config: Config = loadConfig(process.env)
 
   if (config.transport === "stdio") {
     await runStdio(config)
@@ -36,7 +37,7 @@ async function main(): Promise<void> {
   await run()
 }
 
-main().catch((error: unknown) => {
+main().catch((error: unknown): never => {
   log("fatal:", error instanceof Error ? error.message : error)
   process.exit(1)
 })

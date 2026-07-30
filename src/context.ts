@@ -6,8 +6,8 @@ import { MetadataService } from "./espo/metadata.js"
 import type { ToolContext } from "./tools/types.js"
 
 export function contextFromCredential(credential: EspoCredential, config: Config): ToolContext {
-  const espo = new EspoClient(config.baseUrl, credential)
-  const labels = new LabelService(espo, config.metadataTtlSeconds)
+  const espo: EspoClient = new EspoClient(config.baseUrl, credential)
+  const labels: LabelService = new LabelService(espo, config.metadataTtlSeconds)
 
   return { espo, metadata: new MetadataService(espo, config.metadataTtlSeconds, labels) }
 }

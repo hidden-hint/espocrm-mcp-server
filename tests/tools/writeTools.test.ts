@@ -10,45 +10,48 @@ function parse(result: CallToolResult): unknown {
 }
 
 function byName(tools: ToolDef[], name: string): ToolDef {
-  const tool = tools.find((candidate) => candidate.name === name)
+  const tool: ToolDef | undefined = tools.find((candidate: ToolDef): boolean => candidate.name === name)
   assert.ok(tool, `expected a tool named ${name}`)
 
   return tool
 }
 
-test("entityWriteTools produces create, update, and delete tools", async () => {
+test("entityWriteTools produces create, update, and delete tools", async (): Promise<void> => {
   const { context } = createContext({})
-  const tools = await entityWriteTools("Lead", context)
-  assert.deepEqual(tools.map((tool) => tool.name), ["create_lead", "update_lead", "delete_lead"])
+  const tools: ToolDef[] = await entityWriteTools("Lead", context)
+  assert.deepEqual(
+    tools.map((tool: ToolDef): string => tool.name),
+    ["create_lead", "update_lead", "delete_lead"],
+  )
 })
 
-test("the create schema keeps required fields required and others optional", async () => {
+test("the create schema keeps required fields required and others optional", async (): Promise<void> => {
   const { context } = createContext({})
-  const create = byName(await entityWriteTools("Lead", context), "create_lead")
+  const create: ToolDef = byName(await entityWriteTools("Lead", context), "create_lead")
   assert.equal(create.inputSchema.status?.isOptional(), false)
   assert.equal(create.inputSchema.name?.isOptional(), true)
 })
 
-test("the create handler sends only the provided fields", async () => {
+test("the create handler sends only the provided fields", async (): Promise<void> => {
   const { context, calls } = createContext({ create: { id: "new-1" } })
-  const create = byName(await entityWriteTools("Lead", context), "create_lead")
-  const result = await create.handler({ name: "Ann", status: "New", ignored: "x" })
+  const create: ToolDef = byName(await entityWriteTools("Lead", context), "create_lead")
+  const result: CallToolResult = await create.handler({ name: "Ann", status: "New", ignored: "x" })
   assert.deepEqual(parse(result), { id: "new-1" })
   const [entityType, body] = calls.at(-1)!.args as [string, Record<string, unknown>]
   assert.equal(entityType, "Lead")
   assert.deepEqual(body, { name: "Ann", status: "New" })
 })
 
-test("the update schema makes every field optional and adds an id", async () => {
+test("the update schema makes every field optional and adds an id", async (): Promise<void> => {
   const { context } = createContext({})
-  const update = byName(await entityWriteTools("Lead", context), "update_lead")
+  const update: ToolDef = byName(await entityWriteTools("Lead", context), "update_lead")
   assert.ok("id" in update.inputSchema)
   assert.equal(update.inputSchema.status?.isOptional(), true)
 })
 
-test("the update handler splits the id out and sends a partial body", async () => {
+test("the update handler splits the id out and sends a partial body", async (): Promise<void> => {
   const { context, calls } = createContext({ update: { id: "l1" } })
-  const update = byName(await entityWriteTools("Lead", context), "update_lead")
+  const update: ToolDef = byName(await entityWriteTools("Lead", context), "update_lead")
   await update.handler({ id: "l1", status: "Assigned" })
   const [entityType, id, body] = calls.at(-1)!.args as [string, string, Record<string, unknown>]
   assert.equal(entityType, "Lead")
@@ -56,10 +59,10 @@ test("the update handler splits the id out and sends a partial body", async () =
   assert.deepEqual(body, { status: "Assigned" })
 })
 
-test("the delete handler removes the record and echoes the id", async () => {
+test("the delete handler removes the record and echoes the id", async (): Promise<void> => {
   const { context, calls } = createContext({})
-  const remove = byName(await entityWriteTools("Lead", context), "delete_lead")
-  const result = await remove.handler({ id: "l1" })
+  const remove: ToolDef = byName(await entityWriteTools("Lead", context), "delete_lead")
+  const result: CallToolResult = await remove.handler({ id: "l1" })
   assert.deepEqual(parse(result), { deleted: true, id: "l1" })
   const [entityType, id] = calls.at(-1)!.args as [string, string]
   assert.equal(entityType, "Lead")

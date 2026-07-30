@@ -1,4 +1,4 @@
-export const OAUTH_LOGIN_PATH = "/oauth/login"
+export const OAUTH_LOGIN_PATH: string = "/oauth/login"
 
 export interface LoginPageParams {
   requestToken: string

@@ -12,11 +12,7 @@ import { entityWriteTools } from "./writeTools.js"
 // are generated per allowlisted entity with typed filters derived from metadata.
 // An unknown allowlisted entity is logged and skipped rather than breaking startup.
 export async function collectTools(context: ToolContext, config: Config): Promise<ToolDef[]> {
-  const tools: ToolDef[] = [
-    listEntityTypesTool(context),
-    describeEntityTool(context),
-    getStreamTool(context),
-  ]
+  const tools: ToolDef[] = [listEntityTypesTool(context), describeEntityTool(context), getStreamTool(context)]
 
   for (const entityType of config.entityTypes) {
     try {

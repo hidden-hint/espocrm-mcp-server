@@ -56,7 +56,7 @@ const DEFAULT_RESPONSES: FakeClientResponses = {
   i18n: {},
 }
 
-let baseUrlSequence = 0
+let baseUrlSequence: number = 0
 
 export function uniqueBaseUrl(): string {
   baseUrlSequence += 1
@@ -64,34 +64,32 @@ export function uniqueBaseUrl(): string {
   return `https://crm-${baseUrlSequence}.example.test`
 }
 
-export function createFakeClient(
-  baseUrl: string,
-  overrides: Partial<FakeClientResponses>,
-): FakeClient {
-  const responses = { ...DEFAULT_RESPONSES, ...overrides }
+export function createFakeClient(baseUrl: string, overrides: Partial<FakeClientResponses>): FakeClient {
+  const responses: FakeClientResponses = { ...DEFAULT_RESPONSES, ...overrides }
   const calls: RecordedCall[] = []
 
-  const record = <T>(method: string, value: () => T) =>
+  const record: <T>(method: string, value: () => T) => (...args: unknown[]) => Promise<T> =
+    <T>(method: string, value: () => T): ((...args: unknown[]) => Promise<T>) =>
     (...args: unknown[]): Promise<T> => {
       calls.push({ method, args })
 
       return Promise.resolve(value())
     }
 
-  const client = {
+  const client: EspoClient = {
     baseUrl,
     credentialFingerprint: `fingerprint-of-${baseUrl}`,
-    find: record("find", () => responses.find),
-    getRecord: record("getRecord", () => responses.getRecord),
-    getStream: record("getStream", () => responses.getStream),
-    getMetadata: record("getMetadata", () => responses.metadata),
-    getI18n: record("getI18n", () => responses.i18n),
-    create: record("create", () => responses.create),
-    update: record("update", () => responses.update),
-    deleteRecord: record("deleteRecord", () => responses.deleteRecord),
+    find: record("find", (): ListResult<Record<string, unknown>> => responses.find),
+    getRecord: record("getRecord", (): Record<string, unknown> => responses.getRecord),
+    getStream: record("getStream", (): ListResult<Record<string, unknown>> => responses.getStream),
+    getMetadata: record("getMetadata", (): Record<string, unknown> => responses.metadata),
+    getI18n: record("getI18n", (): Record<string, unknown> => responses.i18n),
+    create: record("create", (): Record<string, unknown> => responses.create),
+    update: record("update", (): Record<string, unknown> => responses.update),
+    deleteRecord: record("deleteRecord", (): unknown => responses.deleteRecord),
   } as unknown as EspoClient
 
-  return { client, calls, lastCall: () => calls[calls.length - 1]! }
+  return { client, calls, lastCall: (): RecordedCall => calls[calls.length - 1]! }
 }
 
 export function createContext(overrides: Partial<FakeClientResponses>): {

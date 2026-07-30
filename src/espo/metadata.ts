@@ -22,7 +22,7 @@ interface CacheEntry {
 }
 
 // Metadata is instance schema, not user data. Cached per base URL with a TTL.
-const cache = new Map<string, CacheEntry>()
+const cache: Map<string, CacheEntry> = new Map<string, CacheEntry>()
 
 export class MetadataService {
   constructor(
@@ -32,17 +32,24 @@ export class MetadataService {
   ) {}
 
   async listEntityTypes(): Promise<EntityTypeInfo[]> {
-    const scopes = (await this.metadata()).scopes as Record<string, Record<string, unknown>> | undefined
+    const scopes: Record<string, Record<string, unknown>> | undefined = (await this.metadata()).scopes as
+      Record<string, Record<string, unknown>> | undefined
 
     return Object.entries(scopes ?? {})
-      .filter(([, scope]) => scope?.entity === true)
-      .map(([entityType, scope]) => ({ entityType, custom: scope?.isCustom === true }))
-      .sort((first, second) => first.entityType.localeCompare(second.entityType))
+      .filter(([, scope]: [string, Record<string, unknown>]): boolean => scope?.entity === true)
+      .map(([entityType, scope]: [string, Record<string, unknown>]): { entityType: string; custom: boolean } => ({
+        entityType,
+        custom: scope?.isCustom === true,
+      }))
+      .sort((first: { entityType: string; custom: boolean }, second: { entityType: string; custom: boolean }): number =>
+        first.entityType.localeCompare(second.entityType),
+      )
   }
 
   async describeEntity(entityType: string): Promise<EntityDescription> {
-    const entityDefs = (await this.metadata()).entityDefs as Record<string, Record<string, unknown>> | undefined
-    const definition = entityDefs?.[entityType]
+    const entityDefs: Record<string, Record<string, unknown>> | undefined = (await this.metadata()).entityDefs as
+      Record<string, Record<string, unknown>> | undefined
+    const definition: Record<string, unknown> | undefined = entityDefs?.[entityType]
     if (definition === undefined) {
       throw new EspoApiError(404, `Unknown entity type '${entityType}'`)
     }
@@ -62,34 +69,38 @@ export class MetadataService {
     optionLabels: EntityOptionLabels,
   ): EntityDescription["fields"] {
     return Object.fromEntries(
-      Object.entries(fields ?? {}).map(([name, field]) => [
-        name,
-        pruneUndefined({
-          type: field.type,
-          required: field.required === true ? true : undefined,
-          options: field.options,
-          optionLabels: optionLabels[name],
-        }),
-      ]),
+      Object.entries(fields ?? {}).map(
+        ([name, field]: [string, Record<string, unknown>]): [string, Record<string, unknown>] => [
+          name,
+          pruneUndefined({
+            type: field.type,
+            required: field.required === true ? true : undefined,
+            options: field.options,
+            optionLabels: optionLabels[name],
+          }),
+        ],
+      ),
     )
   }
 
   private describeLinks(links: Record<string, Record<string, unknown>> | undefined): EntityDescription["links"] {
     return Object.fromEntries(
-      Object.entries(links ?? {}).map(([name, link]) => [
-        name,
-        pruneUndefined({ type: link.type, entity: link.entity, foreign: link.foreign }),
-      ]),
+      Object.entries(links ?? {}).map(
+        ([name, link]: [string, Record<string, unknown>]): [string, Record<string, unknown>] => [
+          name,
+          pruneUndefined({ type: link.type, entity: link.entity, foreign: link.foreign }),
+        ],
+      ),
     )
   }
 
   private async metadata(): Promise<Metadata> {
-    const cached = cache.get(this.client.baseUrl)
+    const cached: CacheEntry | undefined = cache.get(this.client.baseUrl)
     if (cached !== undefined && (Date.now() - cached.fetchedAt) / 1000 < this.ttlSeconds) {
       return cached.data
     }
 
-    const data = await this.client.getMetadata()
+    const data: Record<string, unknown> = await this.client.getMetadata()
     cache.set(this.client.baseUrl, { data, fetchedAt: Date.now() })
 
     return data

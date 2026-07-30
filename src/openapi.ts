@@ -1,5 +1,5 @@
 import type { Config } from "./config.js"
-import { entityObjectSchema, writableFields } from "./espo/fields.js"
+import { entityObjectSchema, writableFields, type FieldMap } from "./espo/fields.js"
 import { log } from "./logger.js"
 import type { ToolContext } from "./tools/types.js"
 import { VERSION } from "./version.js"
@@ -32,7 +32,7 @@ function writeProperties(fields: Parameters<typeof writableFields>[0]): { proper
 }
 
 function createBodySchema(fields: Parameters<typeof writableFields>[0]): Json {
-  const { properties, required } = writeProperties(fields)
+  const { properties, required }: { properties: Json; required: string[] } = writeProperties(fields)
 
   return required.length > 0 ? { type: "object", properties, required } : { type: "object", properties }
 }
@@ -88,7 +88,7 @@ export async function buildOpenApiDocument(context: ToolContext, config: Config)
   const paths: Json = {}
 
   for (const entityType of config.entityTypes) {
-    let fields
+    let fields: FieldMap
     try {
       fields = (await context.metadata.describeEntity(entityType)).fields
     } catch (error) {
@@ -162,7 +162,10 @@ export async function buildOpenApiDocument(context: ToolContext, config: Config)
         responses: {
           "200": jsonResponse({
             type: "object",
-            properties: { total: { type: "integer" }, list: { type: "array", items: { $ref: "#/components/schemas/StreamNote" } } },
+            properties: {
+              total: { type: "integer" },
+              list: { type: "array", items: { $ref: "#/components/schemas/StreamNote" } },
+            },
           }),
         },
       },

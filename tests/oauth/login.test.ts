@@ -8,27 +8,39 @@ import { OAUTH_LOGIN_PATH } from "../../src/oauth/loginPage.js"
 import { createOauthProvider } from "../../src/oauth/provider.js"
 import { decodeKey, sealToken, unsealToken, type TokenPayload } from "../../src/oauth/tokens.js"
 import { makeConfig } from "../testing/fixtures.js"
+import type { Config } from "../../src/config.js"
+import type { AuthCodePayload } from "../../src/oauth/tokens.js"
 
-const KEY_B64 = Buffer.alloc(32, 3).toString("base64")
-const realFetch = globalThis.fetch
+const KEY_B64: string = Buffer.alloc(32, 3).toString("base64")
+interface StubbedResponse {
+  ok: boolean
+  status: number
+  text: () => Promise<string>
+}
 
-afterEach(() => {
+const realFetch: typeof fetch = globalThis.fetch
+
+afterEach((): void => {
   globalThis.fetch = realFetch
 })
 
 // Answers the EspoCRM App/user login while letting requests to the local test server through.
 function stubEspoLogin(result: { ok: boolean; status: number; body: string }): void {
-  globalThis.fetch = ((input: URL | string, init?: unknown) => {
-    const url = new URL(String(input))
+  globalThis.fetch = ((input: URL | string, init?: unknown): Promise<Response | StubbedResponse> => {
+    const url: URL = new URL(String(input))
     if (url.hostname.endsWith("example.test")) {
-      return Promise.resolve({ ok: result.ok, status: result.status, text: () => Promise.resolve(result.body) })
+      return Promise.resolve({
+        ok: result.ok,
+        status: result.status,
+        text: (): Promise<string> => Promise.resolve(result.body),
+      })
     }
 
     return realFetch(input as URL, init as RequestInit)
   }) as unknown as typeof fetch
 }
 
-function config() {
+function config(): Config {
   return makeConfig({
     authMode: "oauth",
     apiKey: undefined,
@@ -40,16 +52,19 @@ function config() {
 }
 
 async function startLoginApp(): Promise<{ port: number; close: () => Promise<void> }> {
-  const app = express()
+  const app: express.Express = express()
   app.use(express.urlencoded({ extended: false }))
   app.post(OAUTH_LOGIN_PATH, createLoginHandler(createOauthProvider(config()), config()))
-  const server = await new Promise<Server>((resolve) => {
-    const listening = app.listen(0, () => resolve(listening))
+  const server: Server = await new Promise<Server>((resolve: (value: Server) => void): void => {
+    const listening: Server = app.listen(0, (): void => resolve(listening))
   })
 
   return {
     port: (server.address() as AddressInfo).port,
-    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+    close: (): Promise<void> =>
+      new Promise<void>((resolve: (value: void | PromiseLike<void>) => void): Server =>
+        server.close((): void => resolve()),
+      ),
   }
 }
 
@@ -77,20 +92,23 @@ function post(port: number, body: Record<string, string>): Promise<Response> {
   })
 }
 
-test("valid credentials redirect to the client callback with a code and the original state", async () => {
+test("valid credentials redirect to the client callback with a code and the original state", async (): Promise<void> => {
   stubEspoLogin({ ok: true, status: 200, body: JSON.stringify({ token: "espo-token" }) })
-  const app = await startLoginApp()
+  const app: { port: number; close: () => Promise<void> } = await startLoginApp()
   try {
-    const response = await post(app.port, {
+    const response: Response = await post(app.port, {
       request: authRequestToken({ state: "state-123" }),
       username: "ann",
       password: "s3cret",
     })
     assert.equal(response.status, 302)
-    const location = new URL(response.headers.get("location")!)
+    const location: URL = new URL(response.headers.get("location")!)
     assert.equal(location.origin + location.pathname, "https://client.example/cb")
     assert.equal(location.searchParams.get("state"), "state-123")
-    const code = unsealToken(location.searchParams.get("code")!, decodeKey(KEY_B64)) as Extract<TokenPayload, { kind: "code" }>
+    const code: AuthCodePayload = unsealToken(location.searchParams.get("code")!, decodeKey(KEY_B64)) as Extract<
+      TokenPayload,
+      { kind: "code" }
+    >
     assert.equal(code.kind, "code")
     assert.equal(code.username, "ann")
   } finally {
@@ -98,11 +116,11 @@ test("valid credentials redirect to the client callback with a code and the orig
   }
 })
 
-test("invalid credentials re-render the login form with an error and do not redirect", async () => {
+test("invalid credentials re-render the login form with an error and do not redirect", async (): Promise<void> => {
   stubEspoLogin({ ok: false, status: 401, body: "Unauthorized" })
-  const app = await startLoginApp()
+  const app: { port: number; close: () => Promise<void> } = await startLoginApp()
   try {
-    const response = await post(app.port, {
+    const response: Response = await post(app.port, {
       request: authRequestToken({ state: undefined }),
       username: "ann",
       password: "wrong",
@@ -114,10 +132,10 @@ test("invalid credentials re-render the login form with an error and do not redi
   }
 })
 
-test("a tampered or missing request field is rejected without contacting EspoCRM", async () => {
-  const app = await startLoginApp()
+test("a tampered or missing request field is rejected without contacting EspoCRM", async (): Promise<void> => {
+  const app: { port: number; close: () => Promise<void> } = await startLoginApp()
   try {
-    const response = await post(app.port, { request: "garbage", username: "ann", password: "s3cret" })
+    const response: Response = await post(app.port, { request: "garbage", username: "ann", password: "s3cret" })
     assert.equal(response.status, 400)
   } finally {
     await app.close()

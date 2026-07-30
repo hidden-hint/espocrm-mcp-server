@@ -1,4 +1,5 @@
 import { z } from "zod"
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import { guard, jsonResult } from "./result.js"
 import type { ToolContext, ToolDef } from "./types.js"
 
@@ -13,7 +14,7 @@ export function describeEntityTool(context: ToolContext): ToolDef {
     inputSchema: {
       entityType: z.string().describe("Entity type name, e.g. 'Lead'. Get valid values from list_entity_types."),
     },
-    handler: guard(async ({ entityType }: { entityType: string }) =>
+    handler: guard(async ({ entityType }: { entityType: string }): Promise<CallToolResult> =>
       jsonResult(await context.metadata.describeEntity(entityType)),
     ),
   }

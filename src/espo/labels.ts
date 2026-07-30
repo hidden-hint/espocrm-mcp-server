@@ -14,7 +14,7 @@ interface CacheEntry {
 // The language document is ACL-filtered and rendered in the caller's own
 // language, so — unlike metadata — it is cached per base URL *and* credential
 // and never shared between callers.
-const cache = new Map<string, CacheEntry>()
+const cache: Map<string, CacheEntry> = new Map<string, CacheEntry>()
 
 function translatedLabels(labels: unknown): Record<string, string> {
   if (typeof labels !== "object" || labels === null) {
@@ -23,7 +23,7 @@ function translatedLabels(labels: unknown): Record<string, string> {
 
   return Object.fromEntries(
     Object.entries(labels).filter(
-      ([value, label]) => typeof label === "string" && label !== "" && label !== value,
+      ([value, label]: [string, unknown]): boolean => typeof label === "string" && label !== "" && label !== value,
     ),
   ) as Record<string, string>
 }
@@ -38,27 +38,31 @@ export class LabelService {
   ) {}
 
   async optionLabels(entityType: string): Promise<EntityOptionLabels> {
-    const scope = (await this.language())[entityType] as Record<string, unknown> | undefined
-    const options = scope?.options
+    const scope: Record<string, unknown> | undefined = (await this.language())[entityType] as
+      Record<string, unknown> | undefined
+    const options: unknown = scope?.options
     if (typeof options !== "object" || options === null) {
       return {}
     }
 
     return Object.fromEntries(
       Object.entries(options)
-        .map(([field, labels]) => [field, translatedLabels(labels)] as const)
-        .filter(([, labels]) => Object.keys(labels).length > 0),
+        .map(([field, labels]: [string, unknown]): readonly [string, Record<string, string>] => [
+          field,
+          translatedLabels(labels),
+        ])
+        .filter(([, labels]: readonly [string, Record<string, string>]): boolean => Object.keys(labels).length > 0),
     )
   }
 
   private async language(): Promise<Language> {
-    const key = `${this.client.baseUrl}|${this.client.credentialFingerprint}`
-    const cached = cache.get(key)
+    const key: string = `${this.client.baseUrl}|${this.client.credentialFingerprint}`
+    const cached: CacheEntry | undefined = cache.get(key)
     if (cached !== undefined && (Date.now() - cached.fetchedAt) / 1000 < this.ttlSeconds) {
       return cached.data
     }
 
-    const data = await this.fetchLanguage()
+    const data: Language = await this.fetchLanguage()
     cache.set(key, { data, fetchedAt: Date.now() })
 
     return data

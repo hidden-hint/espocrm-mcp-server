@@ -1,2 +1,2 @@
-export const SERVER_NAME = "espocrm-mcp-server"
-export const VERSION = "0.1.0"
+export const SERVER_NAME: string = "espocrm-mcp-server"
+export const VERSION: string = "0.1.0"

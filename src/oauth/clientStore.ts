@@ -8,8 +8,10 @@ export class InMemoryClientStore implements OAuthRegisteredClientsStore {
     return this.memoizedClients.get(clientId)
   }
 
-  registerClient(client: Omit<OAuthClientInformationFull, "client_id" | "client_id_issued_at">): OAuthClientInformationFull {
-    const full = client as OAuthClientInformationFull
+  registerClient(
+    client: Omit<OAuthClientInformationFull, "client_id" | "client_id_issued_at">,
+  ): OAuthClientInformationFull {
+    const full: OAuthClientInformationFull = client as OAuthClientInformationFull
     this.memoizedClients.set(full.client_id, full)
 
     return full

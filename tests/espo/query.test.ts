@@ -3,26 +3,23 @@ import assert from "node:assert/strict"
 import { applyQuery } from "../../src/espo/query.js"
 
 function serialize(value: unknown): string {
-  const params = new URLSearchParams()
+  const params: URLSearchParams = new URLSearchParams()
   applyQuery(params, value)
 
   return decodeURIComponent(params.toString())
 }
 
-test("applyQuery serializes a flat object of primitives", () => {
+test("applyQuery serializes a flat object of primitives", (): void => {
   assert.equal(serialize({ maxSize: 20, offset: 0, order: "desc" }), "maxSize=20&offset=0&order=desc")
 })
 
-test("applyQuery serializes nested where conditions into PHP bracket notation", () => {
-  const query = { where: [{ type: "equals", attribute: "status", value: "New" }] }
-  assert.equal(
-    serialize(query),
-    "where[0][type]=equals&where[0][attribute]=status&where[0][value]=New",
-  )
+test("applyQuery serializes nested where conditions into PHP bracket notation", (): void => {
+  const query: Record<string, unknown> = { where: [{ type: "equals", attribute: "status", value: "New" }] }
+  assert.equal(serialize(query), "where[0][type]=equals&where[0][attribute]=status&where[0][value]=New")
 })
 
-test("applyQuery indexes multiple array elements", () => {
-  const query = {
+test("applyQuery indexes multiple array elements", (): void => {
+  const query: Record<string, unknown> = {
     where: [
       { type: "isTrue", attribute: "doNotCall" },
       { type: "equals", attribute: "source", value: "Web" },
@@ -34,15 +31,15 @@ test("applyQuery indexes multiple array elements", () => {
   )
 })
 
-test("applyQuery skips undefined and null but keeps booleans and zero", () => {
+test("applyQuery skips undefined and null but keeps booleans and zero", (): void => {
   assert.equal(serialize({ a: undefined, b: null, c: false, d: 0 }), "c=false&d=0")
 })
 
-test("applyQuery stringifies boolean values", () => {
+test("applyQuery stringifies boolean values", (): void => {
   assert.equal(serialize({ flag: true }), "flag=true")
 })
 
-test("applyQuery does nothing for a top-level undefined or null value", () => {
+test("applyQuery does nothing for a top-level undefined or null value", (): void => {
   assert.equal(serialize(undefined), "")
   assert.equal(serialize(null), "")
 })

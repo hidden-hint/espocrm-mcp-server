@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { buildOpenApiDocument } from "../src/openapi.js"
 import { createContext, makeConfig } from "./testing/fixtures.js"
 
-test("buildOpenApiDocument produces a 3.1 document with security schemes and server URL", async () => {
+test("buildOpenApiDocument produces a 3.1 document with security schemes and server URL", async (): Promise<void> => {
   const { context } = createContext({})
   const doc = (await buildOpenApiDocument(context, makeConfig({ entityTypes: ["Lead"] }))) as any
   assert.equal(doc.openapi, "3.1.0")
@@ -12,7 +12,7 @@ test("buildOpenApiDocument produces a 3.1 document with security schemes and ser
   assert.ok(doc.components.securitySchemes.EspoAuthorization)
 })
 
-test("buildOpenApiDocument types entity schemas from live metadata plus StreamNote", async () => {
+test("buildOpenApiDocument types entity schemas from live metadata plus StreamNote", async (): Promise<void> => {
   const { context } = createContext({})
   const doc = (await buildOpenApiDocument(context, makeConfig({ entityTypes: ["Lead"] }))) as any
   assert.ok(doc.components.schemas.StreamNote)
@@ -20,7 +20,7 @@ test("buildOpenApiDocument types entity schemas from live metadata plus StreamNo
   assert.deepEqual(doc.components.schemas.Lead.required, ["status"])
 })
 
-test("buildOpenApiDocument documents renamed option labels on both the record and the write body", async () => {
+test("buildOpenApiDocument documents renamed option labels on both the record and the write body", async (): Promise<void> => {
   const { context } = createContext({})
   const doc = (await buildOpenApiDocument(context, makeConfig({ entityTypes: ["Lead"], readOnly: false }))) as any
   assert.deepEqual(doc.components.schemas.Lead.properties.status, {
@@ -32,7 +32,7 @@ test("buildOpenApiDocument documents renamed option labels on both the record an
   assert.match(body.properties.status.description, /"In Talks" = Assigned\. Either form is accepted\./)
 })
 
-test("buildOpenApiDocument emits search, item, and stream paths per entity", async () => {
+test("buildOpenApiDocument emits search, item, and stream paths per entity", async (): Promise<void> => {
   const { context } = createContext({})
   const doc = (await buildOpenApiDocument(context, makeConfig({ entityTypes: ["Lead"] }))) as any
   assert.ok(doc.paths["/Lead"].get)
@@ -40,7 +40,7 @@ test("buildOpenApiDocument emits search, item, and stream paths per entity", asy
   assert.ok(doc.paths["/Lead/{id}/stream"].get)
 })
 
-test("buildOpenApiDocument omits write operations in read-only mode", async () => {
+test("buildOpenApiDocument omits write operations in read-only mode", async (): Promise<void> => {
   const { context } = createContext({})
   const doc = (await buildOpenApiDocument(context, makeConfig({ entityTypes: ["Lead"], readOnly: true }))) as any
   assert.equal(doc.paths["/Lead"].post, undefined)
@@ -48,7 +48,7 @@ test("buildOpenApiDocument omits write operations in read-only mode", async () =
   assert.equal(doc.paths["/Lead/{id}"].delete, undefined)
 })
 
-test("buildOpenApiDocument includes write operations when writes are enabled", async () => {
+test("buildOpenApiDocument includes write operations when writes are enabled", async (): Promise<void> => {
   const { context } = createContext({})
   const doc = (await buildOpenApiDocument(context, makeConfig({ entityTypes: ["Lead"], readOnly: false }))) as any
   assert.ok(doc.paths["/Lead"].post)
@@ -56,7 +56,7 @@ test("buildOpenApiDocument includes write operations when writes are enabled", a
   assert.ok(doc.paths["/Lead/{id}"].delete)
 })
 
-test("buildOpenApiDocument skips an unknown entity type", async () => {
+test("buildOpenApiDocument skips an unknown entity type", async (): Promise<void> => {
   const { context } = createContext({})
   const doc = (await buildOpenApiDocument(context, makeConfig({ entityTypes: ["Lead", "Ghost"] }))) as any
   assert.ok(doc.paths["/Lead"])

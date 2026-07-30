@@ -1,4 +1,5 @@
 import { z } from "zod"
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import { writableFields, type WriteFieldSpec } from "../espo/fields.js"
 import { toolSlug } from "./entityTools.js"
 import { guard, jsonResult } from "./result.js"
@@ -39,7 +40,7 @@ function createTool(entityType: string, context: ToolContext, specs: WriteFieldS
     title: `Create ${entityType}`,
     description: `Create a new ${entityType} record. Fields are validated and ACL-checked server-side by EspoCRM.`,
     inputSchema: createShape(specs),
-    handler: guard(async (args: Record<string, unknown>) =>
+    handler: guard(async (args: Record<string, unknown>): Promise<CallToolResult> =>
       jsonResult(await context.espo.create(entityType, bodyFromArgs(specs, args))),
     ),
   }
@@ -53,8 +54,8 @@ function updateTool(entityType: string, context: ToolContext, specs: WriteFieldS
       `Update a ${entityType} record by id. Only the fields you provide are changed (partial update); omitted ` +
       `fields are left untouched. ACL-checked server-side.`,
     inputSchema: updateShape(specs),
-    handler: guard(async (args: Record<string, unknown>) => {
-      const { id, ...rest } = args
+    handler: guard(async (args: Record<string, unknown>): Promise<CallToolResult> => {
+      const { id, ...rest }: Record<string, unknown> = args
 
       return jsonResult(await context.espo.update(entityType, String(id), bodyFromArgs(specs, rest)))
     }),
@@ -69,7 +70,7 @@ function deleteTool(entityType: string, context: ToolContext): ToolDef {
       `Delete a ${entityType} record by id. In EspoCRM this moves the record to the deleted state ` +
       `(recoverable from the recycle bin). ACL-checked server-side.`,
     inputSchema: { id: z.string().describe("Record id to delete.") },
-    handler: guard(async ({ id }: { id: string }) => {
+    handler: guard(async ({ id }: { id: string }): Promise<CallToolResult> => {
       await context.espo.deleteRecord(entityType, id)
 
       return jsonResult({ deleted: true, id })
@@ -78,7 +79,11 @@ function deleteTool(entityType: string, context: ToolContext): ToolDef {
 }
 
 export async function entityWriteTools(entityType: string, context: ToolContext): Promise<ToolDef[]> {
-  const specs = writableFields((await context.metadata.describeEntity(entityType)).fields)
+  const specs: WriteFieldSpec[] = writableFields((await context.metadata.describeEntity(entityType)).fields)
 
-  return [createTool(entityType, context, specs), updateTool(entityType, context, specs), deleteTool(entityType, context)]
+  return [
+    createTool(entityType, context, specs),
+    updateTool(entityType, context, specs),
+    deleteTool(entityType, context),
+  ]
 }

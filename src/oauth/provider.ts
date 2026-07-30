@@ -21,8 +21,8 @@ import {
   type TokenPayload,
 } from "./tokens.js"
 
-const AUTH_REQUEST_TTL_SECONDS = 600
-const AUTH_CODE_TTL_SECONDS = 60
+const AUTH_REQUEST_TTL_SECONDS: number = 600
+const AUTH_CODE_TTL_SECONDS: number = 60
 
 function nowSeconds(): number {
   return Math.floor(Date.now() / 1000)
@@ -74,7 +74,7 @@ export class EspoOAuthServerProvider implements OAuthServerProvider {
   }
 
   unsealAuthRequest(requestToken: string): AuthRequestPayload {
-    const payload = this.unseal(requestToken)
+    const payload: TokenPayload = this.unseal(requestToken)
     if ("authRequest" !== payload.kind || payload.exp < nowSeconds()) {
       throw new InvalidGrantError("Login request is invalid or has expired")
     }
@@ -107,7 +107,7 @@ export class EspoOAuthServerProvider implements OAuthServerProvider {
     _codeVerifier?: string,
     redirectUri?: string,
   ): Promise<OAuthTokens> {
-    const code = this.decodeAuthCode(client, authorizationCode)
+    const code: AuthCodePayload = this.decodeAuthCode(client, authorizationCode)
     if (redirectUri !== undefined && redirectUri !== code.redirectUri) {
       throw new InvalidGrantError("redirect_uri does not match the authorization request")
     }
@@ -120,7 +120,7 @@ export class EspoOAuthServerProvider implements OAuthServerProvider {
     refreshToken: string,
     scopes?: string[],
   ): Promise<OAuthTokens> {
-    const payload = this.unseal(refreshToken)
+    const payload: TokenPayload = this.unseal(refreshToken)
     if ("refresh" !== payload.kind || payload.clientId !== client.client_id) {
       throw new InvalidGrantError("Invalid refresh token")
     }
@@ -129,7 +129,7 @@ export class EspoOAuthServerProvider implements OAuthServerProvider {
   }
 
   async verifyAccessToken(token: string): Promise<AuthInfo> {
-    const payload = this.unseal(token)
+    const payload: TokenPayload = this.unseal(token)
     if ("access" !== payload.kind) {
       throw new InvalidTokenError("Not an access token")
     }
@@ -160,7 +160,7 @@ export class EspoOAuthServerProvider implements OAuthServerProvider {
     password: string,
     scopes: string[],
   ): Promise<OAuthTokens> {
-    const espoAuthToken = await this.login(username, password)
+    const espoAuthToken: string = await this.login(username, password)
     const access: AccessTokenPayload = {
       kind: "access",
       espoCredential: espoAuthorizationCredential(username, espoAuthToken),
@@ -193,7 +193,7 @@ export class EspoOAuthServerProvider implements OAuthServerProvider {
   }
 
   private decodeAuthCode(client: OAuthClientInformationFull, authorizationCode: string): AuthCodePayload {
-    const payload = this.unseal(authorizationCode)
+    const payload: TokenPayload = this.unseal(authorizationCode)
     if ("code" !== payload.kind || payload.clientId !== client.client_id || payload.exp < nowSeconds()) {
       throw new InvalidGrantError("Authorization code is invalid or has expired")
     }

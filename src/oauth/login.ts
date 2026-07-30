@@ -5,9 +5,10 @@ import { log } from "../logger.js"
 import { authenticateEspoUser } from "./espoLogin.js"
 import { renderLoginPage } from "./loginPage.js"
 import type { EspoOAuthServerProvider } from "./provider.js"
+import type { AuthRequestPayload } from "./tokens.js"
 
 function field(request: Request, name: string): string {
-  const value = (request.body as Record<string, unknown> | undefined)?.[name]
+  const value: unknown = (request.body as Record<string, unknown> | undefined)?.[name]
 
   return typeof value === "string" ? value : ""
 }
@@ -18,11 +19,11 @@ async function handleLogin(
   request: Request,
   response: Response,
 ): Promise<void> {
-  const requestToken = field(request, "request")
-  const username = field(request, "username")
-  const password = field(request, "password")
+  const requestToken: string = field(request, "request")
+  const username: string = field(request, "username")
+  const password: string = field(request, "password")
 
-  const authRequest = provider.unsealAuthRequest(requestToken)
+  const authRequest: AuthRequestPayload = provider.unsealAuthRequest(requestToken)
 
   try {
     await authenticateEspoUser(config.baseUrl, username, password)
@@ -39,7 +40,7 @@ async function handleLogin(
     throw error
   }
 
-  const location = new URL(authRequest.redirectUri)
+  const location: URL = new URL(authRequest.redirectUri)
   location.searchParams.set("code", provider.issueAuthorizationCode(authRequest, username, password))
   if (authRequest.state !== undefined) {
     location.searchParams.set("state", authRequest.state)
@@ -49,8 +50,8 @@ async function handleLogin(
 }
 
 export function createLoginHandler(provider: EspoOAuthServerProvider, config: Config): RequestHandler {
-  return (request, response) => {
-    handleLogin(provider, config, request, response).catch((error: unknown) => {
+  return (request: Request, response: Response): void => {
+    handleLogin(provider, config, request, response).catch((error: unknown): void => {
       log("oauth login failed:", error instanceof Error ? error.message : String(error))
       if (!response.headersSent) {
         response.status(400).type("html").send("Login request could not be processed. Restart the sign-in flow.")

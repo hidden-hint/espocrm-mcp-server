@@ -11,16 +11,16 @@ function parse(result: CallToolResult): any {
   return JSON.parse((result.content[0] as { text: string }).text)
 }
 
-test("list_entity_types returns the instance's entity types", async () => {
+test("list_entity_types returns the instance's entity types", async (): Promise<void> => {
   const { context } = createContext({})
-  const result = await listEntityTypesTool(context).handler({})
-  const names = parse(result).map((entry: { entityType: string }) => entry.entityType)
+  const result: CallToolResult = await listEntityTypesTool(context).handler({})
+  const names = parse(result).map((entry: { entityType: string }): string => entry.entityType)
   assert.deepEqual(names, ["CDeal", "Contact", "Lead"])
 })
 
-test("describe_entity returns the pruned field and link description", async () => {
+test("describe_entity returns the pruned field and link description", async (): Promise<void> => {
   const { context } = createContext({})
-  const result = await describeEntityTool(context).handler({ entityType: "Lead" })
+  const result: CallToolResult = await describeEntityTool(context).handler({ entityType: "Lead" })
   const description = parse(result)
   assert.equal(description.entityType, "Lead")
   assert.deepEqual(description.fields.status, {
@@ -31,20 +31,20 @@ test("describe_entity returns the pruned field and link description", async () =
   })
 })
 
-test("describe_entity tells the caller that optionLabels map stored values to UI labels", async () => {
+test("describe_entity tells the caller that optionLabels map stored values to UI labels", async (): Promise<void> => {
   const { context } = createContext({})
   assert.match(describeEntityTool(context).description, /optionLabels/)
 })
 
-test("describe_entity surfaces an unknown entity as a tool error", async () => {
+test("describe_entity surfaces an unknown entity as a tool error", async (): Promise<void> => {
   const { context } = createContext({})
-  const result = await describeEntityTool(context).handler({ entityType: "Ghost" })
+  const result: CallToolResult = await describeEntityTool(context).handler({ entityType: "Ghost" })
   assert.equal(result.isError, true)
 })
 
-test("get_stream requests the stream newest-first with a default page size", async () => {
+test("get_stream requests the stream newest-first with a default page size", async (): Promise<void> => {
   const { context, calls } = createContext({ getStream: { total: 1, list: [{ id: "note-1" }] } })
-  const result = await getStreamTool(context).handler({ entityType: "Lead", id: "l1" })
+  const result: CallToolResult = await getStreamTool(context).handler({ entityType: "Lead", id: "l1" })
   assert.deepEqual(parse(result), { total: 1, list: [{ id: "note-1" }] })
   const [entityType, id, params] = calls.at(-1)!.args as [string, string, Record<string, unknown>]
   assert.equal(entityType, "Lead")
@@ -52,9 +52,13 @@ test("get_stream requests the stream newest-first with a default page size", asy
   assert.deepEqual(params, { maxSize: 20, orderBy: "createdAt", order: "desc" })
 })
 
-test("post_to_stream creates a Post Note linked to the parent record", async () => {
+test("post_to_stream creates a Post Note linked to the parent record", async (): Promise<void> => {
   const { context, calls } = createContext({ create: { id: "note-1" } })
-  const result = await postToStreamTool(context).handler({ entityType: "Lead", id: "l1", post: "Called back" })
+  const result: CallToolResult = await postToStreamTool(context).handler({
+    entityType: "Lead",
+    id: "l1",
+    post: "Called back",
+  })
   assert.deepEqual(parse(result), { id: "note-1" })
   const [entityType, body] = calls.at(-1)!.args as [string, Record<string, unknown>]
   assert.equal(entityType, "Note")

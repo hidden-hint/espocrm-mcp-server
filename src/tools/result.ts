@@ -13,7 +13,7 @@ export function errorResult(message: string): CallToolResult {
 // Wraps a tool handler so EspoCRM/API failures become MCP tool errors
 // instead of crashing the request.
 export function guard<A>(handler: (args: A) => Promise<CallToolResult>): (args: A) => Promise<CallToolResult> {
-  return async (args: A) => {
+  return async (args: A): Promise<CallToolResult> => {
     try {
       return await handler(args)
     } catch (error) {

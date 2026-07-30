@@ -56,17 +56,13 @@ export class EspoClient {
     return this.request("DELETE", `${encodeURIComponent(entityType)}/${encodeURIComponent(id)}`, {})
   }
 
-  private async request<T>(
-    method: string,
-    path: string,
-    options: { query?: QueryParams; body?: unknown },
-  ): Promise<T> {
-    const url = new URL(`${this.baseUrl}/api/v1/${path}`)
+  private async request<T>(method: string, path: string, options: { query?: QueryParams; body?: unknown }): Promise<T> {
+    const url: URL = new URL(`${this.baseUrl}/api/v1/${path}`)
     if (options.query !== undefined) {
       applyQuery(url.searchParams, options.query)
     }
 
-    const response = await fetch(url, {
+    const response: Response = await fetch(url, {
       method,
       headers: {
         Accept: "application/json",
@@ -76,7 +72,7 @@ export class EspoClient {
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
     })
 
-    const text = await response.text()
+    const text: string = await response.text()
     if (!response.ok) {
       throw new EspoApiError(response.status, text)
     }

@@ -8,10 +8,7 @@ import { SERVER_NAME, VERSION } from "./version.js"
 // called per request so each server's tools carry that caller's credential, and
 // its per-entity tool schemas reflect that instance's metadata.
 export async function buildServer(context: ToolContext, config: Config): Promise<McpServer> {
-  const server = new McpServer(
-    { name: SERVER_NAME, version: VERSION },
-    { capabilities: { tools: {} } },
-  )
+  const server: McpServer = new McpServer({ name: SERVER_NAME, version: VERSION }, { capabilities: { tools: {} } })
 
   for (const tool of await collectTools(context, config)) {
     server.registerTool(

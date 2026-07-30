@@ -9,7 +9,7 @@ export interface WhereItem {
 }
 
 // Param names owned by the search tool itself — a field must not shadow them.
-const RESERVED = new Set([
+const RESERVED: Set<string> = new Set([
   "where",
   "textFilter",
   "select",
@@ -34,7 +34,7 @@ const FILTERABLE_PRIORITY: Record<string, number> = {
   currency: 4,
 }
 
-const MAX_TYPED_FILTERS = 25
+const MAX_TYPED_FILTERS: number = 25
 
 interface Contribution {
   params: z.ZodRawShape
@@ -46,8 +46,17 @@ export interface EntityFilters {
   toConditions: (args: Record<string, unknown>) => WhereItem[]
 }
 
+// A field weighed for inclusion in the typed filter set.
+interface FilterCandidate {
+  name: string
+  definition: Record<string, unknown>
+  priority: number
+}
+
 function stringOptions(options: unknown): string[] {
-  return Array.isArray(options) ? options.filter((option): option is string => typeof option === "string" && option !== "") : []
+  return Array.isArray(options)
+    ? options.filter((option: unknown): option is string => typeof option === "string" && option !== "")
+    : []
 }
 
 // Option values renamed in EspoCRM's Label Manager: the label is what users (and
@@ -55,29 +64,29 @@ function stringOptions(options: unknown): string[] {
 type OptionLabels = Record<string, string>
 
 function optionLabels(definition: Record<string, unknown>): OptionLabels {
-  const labels = definition.optionLabels
+  const labels: unknown = definition.optionLabels
   if (typeof labels !== "object" || labels === null) {
     return {}
   }
 
   return Object.fromEntries(
     Object.entries(labels).filter(
-      ([value, label]) => typeof label === "string" && label !== "" && label !== value,
+      ([value, label]: [string, unknown]): boolean => typeof label === "string" && label !== "" && label !== value,
     ),
   ) as OptionLabels
 }
 
 function labelDescription(options: string[], labels: OptionLabels): string {
-  const pairs = options
-    .filter((option) => labels[option] !== undefined)
-    .map((option) => `"${labels[option]}" = ${option}`)
+  const pairs: string[] = options
+    .filter((option: string): boolean => labels[option] !== undefined)
+    .map((option: string): string => `"${labels[option]}" = ${option}`)
 
   return pairs.length === 0 ? "" : `UI labels: ${pairs.join(", ")}.`
 }
 
 // Inputs take either form; the value is what reaches EspoCRM.
 function inputLabelDescription(options: string[], labels: OptionLabels): string {
-  const described = labelDescription(options, labels)
+  const described: string = labelDescription(options, labels)
 
   return described === "" ? "" : `${described} Either form is accepted.`
 }
@@ -85,25 +94,25 @@ function inputLabelDescription(options: string[], labels: OptionLabels): string 
 // A label only stands in for its value when it is unambiguous: labels that
 // duplicate another option's stored value or another option's label are dropped.
 function valuesByLabel(options: string[], labels: OptionLabels): Record<string, string> {
-  const labelled = options.filter((option) => labels[option] !== undefined)
-  const unambiguous = labelled.filter(
-    (option) =>
+  const labelled: string[] = options.filter((option: string): boolean => labels[option] !== undefined)
+  const unambiguous: string[] = labelled.filter(
+    (option: string): boolean =>
       !options.includes(labels[option]!) &&
-      labelled.every((other) => other === option || labels[other] !== labels[option]),
+      labelled.every((other: string): boolean => other === option || labels[other] !== labels[option]),
   )
 
-  return Object.fromEntries(unambiguous.map((option) => [labels[option]!, option]))
+  return Object.fromEntries(unambiguous.map((option: string): [string, string] => [labels[option]!, option]))
 }
 
 function enumSchema(options: string[], labels: OptionLabels): z.ZodTypeAny {
-  const values = z.enum(options as [string, ...string[]])
-  const byLabel = valuesByLabel(options, labels)
+  const values: z.ZodEnum<[string, ...string[]]> = z.enum(options as [string, ...string[]])
+  const byLabel: Record<string, string> = valuesByLabel(options, labels)
   if (Object.keys(byLabel).length === 0) {
     return values
   }
 
   return z.preprocess(
-    (input) => (typeof input === "string" && byLabel[input] !== undefined ? byLabel[input] : input),
+    (input: unknown): unknown => (typeof input === "string" && byLabel[input] !== undefined ? byLabel[input] : input),
     values,
   )
 }
@@ -117,12 +126,12 @@ function describedJson(json: Record<string, unknown>, note: string): Record<stri
 }
 
 function sentences(...parts: string[]): string {
-  return parts.filter((part) => part !== "").join(" ")
+  return parts.filter((part: string): boolean => part !== "").join(" ")
 }
 
 function rangeContribution(name: string, makeSchema: () => z.ZodTypeAny, unit: string): Contribution | null {
-  const from = `${name}From`
-  const to = `${name}To`
+  const from: string = `${name}From`
+  const to: string = `${name}To`
   if (RESERVED.has(from) || RESERVED.has(to)) {
     return null
   }
@@ -132,7 +141,7 @@ function rangeContribution(name: string, makeSchema: () => z.ZodTypeAny, unit: s
       [from]: makeSchema().optional().describe(`${name} on or after (${unit}).`),
       [to]: makeSchema().optional().describe(`${name} on or before (${unit}).`),
     },
-    build: (args) => {
+    build: (args: Record<string, unknown>): WhereItem[] => {
       const conditions: WhereItem[] = []
       if (args[from] !== undefined) {
         conditions.push({ type: "greaterThanOrEquals", attribute: name, value: args[from] })
@@ -147,15 +156,15 @@ function rangeContribution(name: string, makeSchema: () => z.ZodTypeAny, unit: s
 }
 
 function contributionFor(name: string, definition: Record<string, unknown>): Contribution | null {
-  const type = typeof definition.type === "string" ? definition.type : ""
+  const type: string = typeof definition.type === "string" ? definition.type : ""
 
   switch (type) {
     case "enum": {
-      const options = stringOptions(definition.options)
+      const options: string[] = stringOptions(definition.options)
       if (options.length === 0 || RESERVED.has(name)) {
         return null
       }
-      const labels = optionLabels(definition)
+      const labels: OptionLabels = optionLabels(definition)
 
       return {
         params: {
@@ -163,7 +172,8 @@ function contributionFor(name: string, definition: Record<string, unknown>): Con
             .optional()
             .describe(sentences(`Filter by ${name}.`, inputLabelDescription(options, labels))),
         },
-        build: (args) => (args[name] === undefined ? [] : [{ type: "equals", attribute: name, value: args[name] }]),
+        build: (args: Record<string, unknown>): { type: string; attribute: string; value: {} | null }[] =>
+          args[name] === undefined ? [] : [{ type: "equals", attribute: name, value: args[name] }],
       }
     }
     case "bool": {
@@ -173,30 +183,31 @@ function contributionFor(name: string, definition: Record<string, unknown>): Con
 
       return {
         params: { [name]: z.boolean().optional().describe(`Filter by ${name}.`) },
-        build: (args) =>
+        build: (args: Record<string, unknown>): { type: string; attribute: string }[] =>
           args[name] === undefined ? [] : [{ type: args[name] === true ? "isTrue" : "isFalse", attribute: name }],
       }
     }
     case "link": {
-      const param = `${name}Id`
+      const param: string = `${name}Id`
       if (RESERVED.has(param)) {
         return null
       }
 
       return {
         params: { [param]: z.string().optional().describe(`Filter by related ${name} id.`) },
-        build: (args) => (args[param] === undefined ? [] : [{ type: "equals", attribute: param, value: args[param] }]),
+        build: (args: Record<string, unknown>): { type: string; attribute: string; value: {} | null }[] =>
+          args[param] === undefined ? [] : [{ type: "equals", attribute: param, value: args[param] }],
       }
     }
     case "date":
-      return rangeContribution(name, () => z.string(), "ISO date")
+      return rangeContribution(name, (): z.ZodString => z.string(), "ISO date")
     case "datetime":
-      return rangeContribution(name, () => z.string(), "ISO date-time")
+      return rangeContribution(name, (): z.ZodString => z.string(), "ISO date-time")
     case "int":
-      return rangeContribution(name, () => z.number().int(), "integer")
+      return rangeContribution(name, (): z.ZodNumber => z.number().int(), "integer")
     case "float":
     case "currency":
-      return rangeContribution(name, () => z.number(), "number")
+      return rangeContribution(name, (): z.ZodNumber => z.number(), "number")
     default:
       return null
   }
@@ -205,39 +216,40 @@ function contributionFor(name: string, definition: Record<string, unknown>): Con
 // Builds typed filter parameters for an entity's high-signal fields, capped to
 // keep the tool schema small, plus a translator to EspoCRM where conditions.
 export function buildFilters(fields: FieldMap): EntityFilters {
-  const candidates = Object.entries(fields)
-    .map(([name, definition]) => ({
+  const candidates: FilterCandidate[] = Object.entries(fields)
+    .map(([name, definition]: [string, Record<string, unknown>]): FilterCandidate => ({
       name,
       definition,
       priority: FILTERABLE_PRIORITY[typeof definition.type === "string" ? definition.type : ""] ?? 99,
     }))
-    .filter((candidate) => candidate.priority < 99)
-    .sort((first, second) => first.priority - second.priority)
+    .filter((candidate: FilterCandidate): boolean => candidate.priority < 99)
+    .sort((first: FilterCandidate, second: FilterCandidate): number => first.priority - second.priority)
 
   const params: z.ZodRawShape = {}
   const contributions: Contribution[] = []
-  const usedNames = new Set<string>()
+  const usedNames: Set<string> = new Set<string>()
 
   for (const candidate of candidates) {
     if (contributions.length >= MAX_TYPED_FILTERS) {
       break
     }
-    const contribution = contributionFor(candidate.name, candidate.definition)
+    const contribution: Contribution | null = contributionFor(candidate.name, candidate.definition)
     if (contribution === null) {
       continue
     }
-    const names = Object.keys(contribution.params)
-    if (names.some((name) => usedNames.has(name))) {
+    const names: string[] = Object.keys(contribution.params)
+    if (names.some((name: string): boolean => usedNames.has(name))) {
       continue
     }
-    names.forEach((name) => usedNames.add(name))
+    names.forEach((name: string): Set<string> => usedNames.add(name))
     Object.assign(params, contribution.params)
     contributions.push(contribution)
   }
 
   return {
     params,
-    toConditions: (args) => contributions.flatMap((contribution) => contribution.build(args)),
+    toConditions: (args: Record<string, unknown>): WhereItem[] =>
+      contributions.flatMap((contribution: Contribution): WhereItem[] => contribution.build(args)),
   }
 }
 
@@ -249,15 +261,15 @@ export interface WriteFieldSpec {
 }
 
 // System / audit fields are never settable through writes.
-const WRITE_SKIP_NAMES = new Set(["id", "createdAt", "modifiedAt", "createdBy", "modifiedBy", "deleted"])
+const WRITE_SKIP_NAMES: Set<string> = new Set(["id", "createdAt", "modifiedAt", "createdBy", "modifiedBy", "deleted"])
 
 function writeSpecFor(name: string, definition: Record<string, unknown>): WriteFieldSpec | null {
   if (WRITE_SKIP_NAMES.has(name) || definition.readOnly === true || definition.notStorable === true) {
     return null
   }
 
-  const type = typeof definition.type === "string" ? definition.type : ""
-  const required = definition.required === true
+  const type: string = typeof definition.type === "string" ? definition.type : ""
+  const required: boolean = definition.required === true
 
   switch (type) {
     case "varchar":
@@ -268,12 +280,12 @@ function writeSpecFor(name: string, definition: Record<string, unknown>): WriteF
     case "email":
       return { name, required, zod: z.string(), json: { type: "string", format: "email" } }
     case "enum": {
-      const options = stringOptions(definition.options)
+      const options: string[] = stringOptions(definition.options)
       if (options.length === 0) {
         return { name, required, zod: z.string(), json: { type: "string" } }
       }
-      const labels = optionLabels(definition)
-      const note = inputLabelDescription(options, labels)
+      const labels: OptionLabels = optionLabels(definition)
+      const note: string = inputLabelDescription(options, labels)
 
       return {
         name,
@@ -284,11 +296,12 @@ function writeSpecFor(name: string, definition: Record<string, unknown>): WriteF
     }
     case "multiEnum":
     case "array": {
-      const options = stringOptions(definition.options)
-      const labels = optionLabels(definition)
-      const note = inputLabelDescription(options, labels)
-      const itemZod = options.length === 0 ? z.string() : enumSchema(options, labels)
-      const itemJson = options.length === 0 ? { type: "string" } : { type: "string", enum: options }
+      const options: string[] = stringOptions(definition.options)
+      const labels: OptionLabels = optionLabels(definition)
+      const note: string = inputLabelDescription(options, labels)
+      const itemZod: z.ZodTypeAny = options.length === 0 ? z.string() : enumSchema(options, labels)
+      const itemJson: Record<string, unknown> =
+        options.length === 0 ? { type: "string" } : { type: "string", enum: options }
 
       return {
         name,
@@ -320,14 +333,15 @@ function writeSpecFor(name: string, definition: Record<string, unknown>): WriteF
 // so the two can never diverge. Required fields sort first.
 export function writableFields(fields: FieldMap): WriteFieldSpec[] {
   const specs: WriteFieldSpec[] = []
-  const usedNames = new Set<string>()
+  const usedNames: Set<string> = new Set<string>()
 
-  const entries = Object.entries(fields).sort(
-    (first, second) => Number(second[1].required === true) - Number(first[1].required === true),
+  const entries: [string, Record<string, unknown>][] = Object.entries(fields).sort(
+    (first: [string, Record<string, unknown>], second: [string, Record<string, unknown>]): number =>
+      Number(second[1].required === true) - Number(first[1].required === true),
   )
 
   for (const [name, definition] of entries) {
-    const spec = writeSpecFor(name, definition)
+    const spec: WriteFieldSpec | null = writeSpecFor(name, definition)
     if (spec === null || usedNames.has(spec.name)) {
       continue
     }
@@ -351,13 +365,11 @@ export function entityObjectSchema(fields: FieldMap): Record<string, unknown> {
     }
   }
 
-  return required.length === 0
-    ? { type: "object", properties }
-    : { type: "object", properties, required }
+  return required.length === 0 ? { type: "object", properties } : { type: "object", properties, required }
 }
 
 function fieldProperties(name: string, definition: Record<string, unknown>): Record<string, unknown> {
-  const type = typeof definition.type === "string" ? definition.type : ""
+  const type: string = typeof definition.type === "string" ? definition.type : ""
 
   switch (type) {
     case "varchar":
@@ -368,16 +380,13 @@ function fieldProperties(name: string, definition: Record<string, unknown>): Rec
     case "email":
       return { [name]: { type: "string", format: "email" } }
     case "enum": {
-      const options = stringOptions(definition.options)
+      const options: string[] = stringOptions(definition.options)
       if (options.length === 0) {
         return { [name]: { type: "string" } }
       }
 
       return {
-        [name]: describedJson(
-          { type: "string", enum: options },
-          labelDescription(options, optionLabels(definition)),
-        ),
+        [name]: describedJson({ type: "string", enum: options }, labelDescription(options, optionLabels(definition))),
       }
     }
     case "bool":

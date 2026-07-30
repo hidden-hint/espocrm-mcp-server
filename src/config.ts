@@ -22,7 +22,7 @@ export interface Config {
 type Env = Record<string, string | undefined>
 
 function required(env: Env, key: string): string {
-  const value = env[key]
+  const value: string | undefined = env[key]
   if (value === undefined || value === "") {
     throw new ConfigError(`Missing required environment variable ${key}`)
   }
@@ -31,7 +31,7 @@ function required(env: Env, key: string): string {
 }
 
 function enumOf<T extends string>(env: Env, key: string, allowed: readonly T[], fallback: T): T {
-  const value = env[key]
+  const value: string | undefined = env[key]
   if (value === undefined || value === "") {
     return fallback
   }
@@ -43,11 +43,11 @@ function enumOf<T extends string>(env: Env, key: string, allowed: readonly T[], 
 }
 
 function integer(env: Env, key: string, fallback: number): number {
-  const value = env[key]
+  const value: string | undefined = env[key]
   if (value === undefined || value === "") {
     return fallback
   }
-  const parsed = Number(value)
+  const parsed: number = Number(value)
   if (!Number.isInteger(parsed)) {
     throw new ConfigError(`Environment variable ${key} must be an integer`)
   }
@@ -56,7 +56,7 @@ function integer(env: Env, key: string, fallback: number): number {
 }
 
 function boolean(env: Env, key: string, fallback: boolean): boolean {
-  const value = env[key]
+  const value: string | undefined = env[key]
   if (value === undefined || value === "") {
     return fallback
   }
@@ -65,22 +65,24 @@ function boolean(env: Env, key: string, fallback: boolean): boolean {
 }
 
 function commaList(env: Env, key: string, fallback: string[]): string[] {
-  const value = env[key]
+  const value: string | undefined = env[key]
   if (value === undefined || value === "") {
     return fallback
   }
 
   return value
     .split(",")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry !== "")
+    .map((entry: string): string => entry.trim())
+    .filter((entry: string): boolean => entry !== "")
 }
 
 function assertValidEncryptionKey(value: string): void {
   try {
     decodeKey(value)
   } catch (error) {
-    throw new ConfigError(`MCP_OAUTH_ENCRYPTION_KEY is invalid: ${error instanceof Error ? error.message : String(error)}`)
+    throw new ConfigError(
+      `MCP_OAUTH_ENCRYPTION_KEY is invalid: ${error instanceof Error ? error.message : String(error)}`,
+    )
   }
 }
 
@@ -98,7 +100,9 @@ function validateOauthMode(config: Config): void {
     throw new ConfigError("ESPOCRM_AUTH_MODE=oauth requires MCP_OAUTH_ISSUER_URL (this server's public URL)")
   }
   if (config.oauthEncryptionKey === undefined || config.oauthEncryptionKey === "") {
-    throw new ConfigError("ESPOCRM_AUTH_MODE=oauth requires MCP_OAUTH_ENCRYPTION_KEY (32 bytes, e.g. `openssl rand -base64 32`)")
+    throw new ConfigError(
+      "ESPOCRM_AUTH_MODE=oauth requires MCP_OAUTH_ENCRYPTION_KEY (32 bytes, e.g. `openssl rand -base64 32`)",
+    )
   }
 
   assertValidEncryptionKey(config.oauthEncryptionKey)
