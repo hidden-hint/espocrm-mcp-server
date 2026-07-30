@@ -1,6 +1,7 @@
-import { z } from "zod";
-import { guard, jsonResult } from "./result.js";
-import type { ToolContext, ToolDef } from "./types.js";
+import { z } from "zod"
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
+import { guard, jsonResult } from "./result.js"
+import type { ToolContext, ToolDef } from "./types.js"
 
 export function postToStreamTool(context: ToolContext): ToolDef {
   return {
@@ -14,8 +15,9 @@ export function postToStreamTool(context: ToolContext): ToolDef {
       id: z.string().describe("Record id to post the note on."),
       post: z.string().describe("The note text."),
     },
-    handler: guard(async ({ entityType, id, post }: { entityType: string; id: string; post: string }) =>
-      jsonResult(await context.espo.create("Note", { type: "Post", parentType: entityType, parentId: id, post })),
+    handler: guard(
+      async ({ entityType, id, post }: { entityType: string; id: string; post: string }): Promise<CallToolResult> =>
+        jsonResult(await context.espo.create("Note", { type: "Post", parentType: entityType, parentId: id, post })),
     ),
-  };
+  }
 }
