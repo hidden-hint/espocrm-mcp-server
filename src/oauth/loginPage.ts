@@ -1,8 +1,8 @@
-export const OAUTH_LOGIN_PATH = "/oauth/login";
+export const OAUTH_LOGIN_PATH = "/oauth/login"
 
 export interface LoginPageParams {
-  requestToken: string;
-  error: string | undefined;
+  requestToken: string
+  error: string | undefined
 }
 
 function escapeHtml(value: string): string {
@@ -11,11 +11,11 @@ function escapeHtml(value: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+    .replace(/'/g, "&#39;")
 }
 
 function errorBanner(error: string | undefined): string {
-  return error === undefined ? "" : `<p class="error">${escapeHtml(error)}</p>`;
+  return error === undefined ? "" : `<p class="error">${escapeHtml(error)}</p>`
 }
 
 export function renderLoginPage(params: LoginPageParams): string {
@@ -50,5 +50,5 @@ export function renderLoginPage(params: LoginPageParams): string {
 </form>
 </body>
 </html>
-`;
+`
 }

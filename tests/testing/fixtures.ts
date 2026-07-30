@@ -1,8 +1,8 @@
-import type { Config } from "../../src/config.js";
-import type { EspoClient, ListResult } from "../../src/espo/client.js";
-import { LabelService } from "../../src/espo/labels.js";
-import { MetadataService } from "../../src/espo/metadata.js";
-import type { ToolContext } from "../../src/tools/types.js";
+import type { Config } from "../../src/config.js"
+import type { EspoClient, ListResult } from "../../src/espo/client.js"
+import { LabelService } from "../../src/espo/labels.js"
+import { MetadataService } from "../../src/espo/metadata.js"
+import type { ToolContext } from "../../src/tools/types.js"
 
 const BASE_CONFIG: Config = {
   baseUrl: "https://crm.example.test",
@@ -17,32 +17,32 @@ const BASE_CONFIG: Config = {
   oauthIssuerUrl: undefined,
   oauthEncryptionKey: undefined,
   accessTokenTtlSeconds: 3600,
-};
+}
 
 export function makeConfig(overrides: Partial<Config>): Config {
-  return { ...BASE_CONFIG, ...overrides };
+  return { ...BASE_CONFIG, ...overrides }
 }
 
 export interface RecordedCall {
-  method: string;
-  args: unknown[];
+  method: string
+  args: unknown[]
 }
 
 export interface FakeClientResponses {
-  find: ListResult;
-  getRecord: Record<string, unknown>;
-  getStream: ListResult;
-  create: Record<string, unknown>;
-  update: Record<string, unknown>;
-  deleteRecord: unknown;
-  metadata: Record<string, unknown>;
-  i18n: Record<string, unknown>;
+  find: ListResult
+  getRecord: Record<string, unknown>
+  getStream: ListResult
+  create: Record<string, unknown>
+  update: Record<string, unknown>
+  deleteRecord: unknown
+  metadata: Record<string, unknown>
+  i18n: Record<string, unknown>
 }
 
 export interface FakeClient {
-  client: EspoClient;
-  calls: RecordedCall[];
-  lastCall: () => RecordedCall;
+  client: EspoClient
+  calls: RecordedCall[]
+  lastCall: () => RecordedCall
 }
 
 const DEFAULT_RESPONSES: FakeClientResponses = {
@@ -54,29 +54,29 @@ const DEFAULT_RESPONSES: FakeClientResponses = {
   deleteRecord: null,
   metadata: {},
   i18n: {},
-};
+}
 
-let baseUrlSequence = 0;
+let baseUrlSequence = 0
 
 export function uniqueBaseUrl(): string {
-  baseUrlSequence += 1;
+  baseUrlSequence += 1
 
-  return `https://crm-${baseUrlSequence}.example.test`;
+  return `https://crm-${baseUrlSequence}.example.test`
 }
 
 export function createFakeClient(
   baseUrl: string,
   overrides: Partial<FakeClientResponses>,
 ): FakeClient {
-  const responses = { ...DEFAULT_RESPONSES, ...overrides };
-  const calls: RecordedCall[] = [];
+  const responses = { ...DEFAULT_RESPONSES, ...overrides }
+  const calls: RecordedCall[] = []
 
   const record = <T>(method: string, value: () => T) =>
     (...args: unknown[]): Promise<T> => {
-      calls.push({ method, args });
+      calls.push({ method, args })
 
-      return Promise.resolve(value());
-    };
+      return Promise.resolve(value())
+    }
 
   const client = {
     baseUrl,
@@ -89,25 +89,25 @@ export function createFakeClient(
     create: record("create", () => responses.create),
     update: record("update", () => responses.update),
     deleteRecord: record("deleteRecord", () => responses.deleteRecord),
-  } as unknown as EspoClient;
+  } as unknown as EspoClient
 
-  return { client, calls, lastCall: () => calls[calls.length - 1]! };
+  return { client, calls, lastCall: () => calls[calls.length - 1]! }
 }
 
 export function createContext(overrides: Partial<FakeClientResponses>): {
-  context: ToolContext;
-  calls: RecordedCall[];
+  context: ToolContext
+  calls: RecordedCall[]
 } {
   const { client, calls } = createFakeClient(uniqueBaseUrl(), {
     metadata: SAMPLE_METADATA,
     i18n: SAMPLE_I18N,
     ...overrides,
-  });
+  })
 
   return {
     context: { espo: client, metadata: new MetadataService(client, 300, new LabelService(client, 300)) },
     calls,
-  };
+  }
 }
 
 // A representative EspoCRM /Metadata payload covering every field rendering the
@@ -157,7 +157,7 @@ export const SAMPLE_METADATA: Record<string, unknown> = {
       links: {},
     },
   },
-};
+}
 
 // A representative EspoCRM /I18n payload: Lead's stock status options renamed in
 // the Label Manager (with one label left identical to its stored value), and an
@@ -172,4 +172,4 @@ export const SAMPLE_I18N: Record<string, unknown> = {
     },
   },
   Contact: { fields: { name: "Name" } },
-};
+}

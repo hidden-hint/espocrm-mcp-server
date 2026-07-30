@@ -1,6 +1,6 @@
-import { z } from "zod";
-import { guard, jsonResult } from "./result.js";
-import type { ToolContext, ToolDef } from "./types.js";
+import { z } from "zod"
+import { guard, jsonResult } from "./result.js"
+import type { ToolContext, ToolDef } from "./types.js"
 
 export function describeEntityTool(context: ToolContext): ToolDef {
   return {
@@ -16,5 +16,5 @@ export function describeEntityTool(context: ToolContext): ToolDef {
     handler: guard(async ({ entityType }: { entityType: string }) =>
       jsonResult(await context.metadata.describeEntity(entityType)),
     ),
-  };
+  }
 }

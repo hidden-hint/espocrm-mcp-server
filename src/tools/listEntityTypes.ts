@@ -1,5 +1,5 @@
-import { guard, jsonResult } from "./result.js";
-import type { ToolContext, ToolDef } from "./types.js";
+import { guard, jsonResult } from "./result.js"
+import type { ToolContext, ToolDef } from "./types.js"
 
 export function listEntityTypesTool(context: ToolContext): ToolDef {
   return {
@@ -10,5 +10,5 @@ export function listEntityTypesTool(context: ToolContext): ToolDef {
       "Use this first to discover what can be searched or read, then call describe_entity for a type's fields.",
     inputSchema: {},
     handler: guard(async () => jsonResult(await context.metadata.listEntityTypes())),
-  };
+  }
 }

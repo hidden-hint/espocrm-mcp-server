@@ -1,59 +1,59 @@
-import { EspoApiError } from "../errors.js";
-import { credentialFingerprint, credentialHeaders, type EspoCredential } from "./credential.js";
-import { applyQuery } from "./query.js";
+import { EspoApiError } from "../errors.js"
+import { credentialFingerprint, credentialHeaders, type EspoCredential } from "./credential.js"
+import { applyQuery } from "./query.js"
 
 export interface ListResult<T = Record<string, unknown>> {
-  total: number;
-  list: T[];
+  total: number
+  list: T[]
 }
 
-type QueryParams = Record<string, unknown>;
+type QueryParams = Record<string, unknown>
 
 export class EspoClient {
-  readonly baseUrl: string;
-  readonly credentialFingerprint: string;
-  private readonly credential: EspoCredential;
+  readonly baseUrl: string
+  readonly credentialFingerprint: string
+  private readonly credential: EspoCredential
 
   constructor(baseUrl: string, credential: EspoCredential) {
-    this.baseUrl = baseUrl.replace(/\/+$/, "");
-    this.credentialFingerprint = credentialFingerprint(credential);
-    this.credential = credential;
+    this.baseUrl = baseUrl.replace(/\/+$/, "")
+    this.credentialFingerprint = credentialFingerprint(credential)
+    this.credential = credential
   }
 
   find(entityType: string, params: QueryParams): Promise<ListResult> {
-    return this.request("GET", encodeURIComponent(entityType), { query: params });
+    return this.request("GET", encodeURIComponent(entityType), { query: params })
   }
 
   getRecord(entityType: string, id: string, params: QueryParams): Promise<Record<string, unknown>> {
-    return this.request("GET", `${encodeURIComponent(entityType)}/${encodeURIComponent(id)}`, { query: params });
+    return this.request("GET", `${encodeURIComponent(entityType)}/${encodeURIComponent(id)}`, { query: params })
   }
 
   getStream(entityType: string, id: string, params: QueryParams): Promise<ListResult> {
-    return this.request("GET", `${encodeURIComponent(entityType)}/${encodeURIComponent(id)}/stream`, { query: params });
+    return this.request("GET", `${encodeURIComponent(entityType)}/${encodeURIComponent(id)}/stream`, { query: params })
   }
 
   getMetadata(): Promise<Record<string, unknown>> {
-    return this.request("GET", "Metadata", {});
+    return this.request("GET", "Metadata", {})
   }
 
   getI18n(): Promise<Record<string, unknown>> {
-    return this.request("GET", "I18n", {});
+    return this.request("GET", "I18n", {})
   }
 
   getAppUser(): Promise<Record<string, unknown>> {
-    return this.request("GET", "App/user", {});
+    return this.request("GET", "App/user", {})
   }
 
   create(entityType: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return this.request("POST", encodeURIComponent(entityType), { body: data });
+    return this.request("POST", encodeURIComponent(entityType), { body: data })
   }
 
   update(entityType: string, id: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return this.request("PATCH", `${encodeURIComponent(entityType)}/${encodeURIComponent(id)}`, { body: data });
+    return this.request("PATCH", `${encodeURIComponent(entityType)}/${encodeURIComponent(id)}`, { body: data })
   }
 
   deleteRecord(entityType: string, id: string): Promise<unknown> {
-    return this.request("DELETE", `${encodeURIComponent(entityType)}/${encodeURIComponent(id)}`, {});
+    return this.request("DELETE", `${encodeURIComponent(entityType)}/${encodeURIComponent(id)}`, {})
   }
 
   private async request<T>(
@@ -61,9 +61,9 @@ export class EspoClient {
     path: string,
     options: { query?: QueryParams; body?: unknown },
   ): Promise<T> {
-    const url = new URL(`${this.baseUrl}/api/v1/${path}`);
+    const url = new URL(`${this.baseUrl}/api/v1/${path}`)
     if (options.query !== undefined) {
-      applyQuery(url.searchParams, options.query);
+      applyQuery(url.searchParams, options.query)
     }
 
     const response = await fetch(url, {
@@ -74,13 +74,13 @@ export class EspoClient {
         ...credentialHeaders(this.credential),
       },
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    });
+    })
 
-    const text = await response.text();
+    const text = await response.text()
     if (!response.ok) {
-      throw new EspoApiError(response.status, text);
+      throw new EspoApiError(response.status, text)
     }
 
-    return (text === "" ? null : JSON.parse(text)) as T;
+    return (text === "" ? null : JSON.parse(text)) as T
   }
 }

@@ -1,34 +1,34 @@
-import { createHash } from "node:crypto";
-import type { Config } from "../config.js";
-import { ConfigError } from "../errors.js";
+import { createHash } from "node:crypto"
+import type { Config } from "../config.js"
+import { ConfigError } from "../errors.js"
 
 export type EspoCredential =
   | { kind: "apiKey"; apiKey: string }
-  | { kind: "espoAuthorization"; value: string };
+  | { kind: "espoAuthorization"; value: string }
 
 export function credentialHeaders(credential: EspoCredential): Record<string, string> {
   switch (credential.kind) {
     case "apiKey":
-      return { "X-Api-Key": credential.apiKey };
+      return { "X-Api-Key": credential.apiKey }
     case "espoAuthorization":
-      return { "Espo-Authorization": credential.value };
+      return { "Espo-Authorization": credential.value }
   }
 }
 
 // A one-way digest that identifies a caller for per-user caching without ever
 // holding on to the credential itself.
 export function credentialFingerprint(credential: EspoCredential): string {
-  return createHash("sha256").update(JSON.stringify(credentialHeaders(credential))).digest("hex");
+  return createHash("sha256").update(JSON.stringify(credentialHeaders(credential))).digest("hex")
 }
 
 export function credentialFromConfig(config: Config): EspoCredential {
   if (config.apiKey === undefined || config.apiKey === "") {
-    throw new ConfigError("ESPOCRM_API_KEY is required for apiKey auth mode");
+    throw new ConfigError("ESPOCRM_API_KEY is required for apiKey auth mode")
   }
 
-  return { kind: "apiKey", apiKey: config.apiKey };
+  return { kind: "apiKey", apiKey: config.apiKey }
 }
 
 export function espoAuthorizationCredential(username: string, secret: string): EspoCredential {
-  return { kind: "espoAuthorization", value: Buffer.from(`${username}:${secret}`, "utf8").toString("base64") };
+  return { kind: "espoAuthorization", value: Buffer.from(`${username}:${secret}`, "utf8").toString("base64") }
 }

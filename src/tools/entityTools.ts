@@ -1,8 +1,8 @@
-import { z } from "zod";
-import { buildFilters } from "../espo/fields.js";
-import { pruneUndefined } from "../util.js";
-import { guard, jsonResult } from "./result.js";
-import type { ToolContext, ToolDef } from "./types.js";
+import { z } from "zod"
+import { buildFilters } from "../espo/fields.js"
+import { pruneUndefined } from "../util.js"
+import { guard, jsonResult } from "./result.js"
+import type { ToolContext, ToolDef } from "./types.js"
 
 // EspoCRM entity types are PascalCase (Lead, COpportunity); tool names must be
 // lower snake_case: Lead -> lead, COpportunity -> c_opportunity, SalesOrder ->
@@ -13,7 +13,7 @@ export function toolSlug(entityType: string): string {
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
     .replace(/[^a-zA-Z0-9]+/g, "_")
-    .toLowerCase();
+    .toLowerCase()
 }
 
 const whereItem = z
@@ -27,11 +27,11 @@ const whereItem = z
     attribute: z.string().optional().describe("Field name the condition applies to."),
     value: z.any().optional().describe("Comparison value. For 'and'/'or', an array of nested conditions."),
   })
-  .passthrough();
+  .passthrough()
 
 async function searchTool(entityType: string, context: ToolContext): Promise<ToolDef> {
-  const description = await context.metadata.describeEntity(entityType);
-  const filters = buildFilters(description.fields);
+  const description = await context.metadata.describeEntity(entityType)
+  const filters = buildFilters(description.fields)
 
   return {
     name: `search_${toolSlug(entityType)}`,
@@ -54,9 +54,9 @@ async function searchTool(entityType: string, context: ToolContext): Promise<Too
       primaryFilter: z.string().optional().describe(`Named primary filter defined on ${entityType}.`),
     },
     handler: guard(async (args: Record<string, unknown>) => {
-      const conditions = filters.toConditions(args);
+      const conditions = filters.toConditions(args)
       if (Array.isArray(args.where)) {
-        conditions.push(...args.where);
+        conditions.push(...args.where)
       }
 
       const params = pruneUndefined({
@@ -68,13 +68,13 @@ async function searchTool(entityType: string, context: ToolContext): Promise<Too
         maxSize: typeof args.maxSize === "number" ? args.maxSize : 20,
         offset: args.offset,
         primaryFilter: args.primaryFilter,
-      });
+      })
 
-      const result = await context.espo.find(entityType, params);
+      const result = await context.espo.find(entityType, params)
 
-      return jsonResult({ total: result.total, list: result.list });
+      return jsonResult({ total: result.total, list: result.list })
     }),
-  };
+  }
 }
 
 function getTool(entityType: string, context: ToolContext): ToolDef {
@@ -87,13 +87,13 @@ function getTool(entityType: string, context: ToolContext): ToolDef {
       select: z.array(z.string()).optional().describe("Field names to return. Omit for the full record."),
     },
     handler: guard(async ({ id, select }: { id: string; select?: string[] }) => {
-      const params = pruneUndefined({ select: select?.join(",") });
+      const params = pruneUndefined({ select: select?.join(",") })
 
-      return jsonResult(await context.espo.getRecord(entityType, id, params));
+      return jsonResult(await context.espo.getRecord(entityType, id, params))
     }),
-  };
+  }
 }
 
 export async function entityTools(entityType: string, context: ToolContext): Promise<ToolDef[]> {
-  return [await searchTool(entityType, context), getTool(entityType, context)];
+  return [await searchTool(entityType, context), getTool(entityType, context)]
 }

@@ -1,6 +1,6 @@
-import { z } from "zod";
-import { guard, jsonResult } from "./result.js";
-import type { ToolContext, ToolDef } from "./types.js";
+import { z } from "zod"
+import { guard, jsonResult } from "./result.js"
+import type { ToolContext, ToolDef } from "./types.js"
 
 export function postToStreamTool(context: ToolContext): ToolDef {
   return {
@@ -17,5 +17,5 @@ export function postToStreamTool(context: ToolContext): ToolDef {
     handler: guard(async ({ entityType, id, post }: { entityType: string; id: string; post: string }) =>
       jsonResult(await context.espo.create("Note", { type: "Post", parentType: entityType, parentId: id, post })),
     ),
-  };
+  }
 }

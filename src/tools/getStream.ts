@@ -1,7 +1,7 @@
-import { z } from "zod";
-import { pruneUndefined } from "../util.js";
-import { guard, jsonResult } from "./result.js";
-import type { ToolContext, ToolDef } from "./types.js";
+import { z } from "zod"
+import { pruneUndefined } from "../util.js"
+import { guard, jsonResult } from "./result.js"
+import type { ToolContext, ToolDef } from "./types.js"
 
 export function getStreamTool(context: ToolContext): ToolDef {
   return {
@@ -23,12 +23,12 @@ export function getStreamTool(context: ToolContext): ToolDef {
           offset,
           orderBy: "createdAt",
           order: "desc",
-        });
+        })
 
-        const result = await context.espo.getStream(entityType, id, params);
+        const result = await context.espo.getStream(entityType, id, params)
 
-        return jsonResult({ total: result.total, list: result.list });
+        return jsonResult({ total: result.total, list: result.list })
       },
     ),
-  };
+  }
 }
