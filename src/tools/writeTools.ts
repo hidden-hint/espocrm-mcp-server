@@ -1,6 +1,6 @@
 import { z } from "zod"
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
-import { writableFields, type WriteFieldSpec } from "../espo/fields.js"
+import { writableFields, type ParamShape, type WriteFieldSpec } from "../espo/fields.js"
 import { toolSlug } from "./entityTools.js"
 import { guard, jsonResult } from "./result.js"
 import type { ToolContext, ToolDef } from "./types.js"
@@ -16,8 +16,8 @@ function bodyFromArgs(specs: WriteFieldSpec[], args: Record<string, unknown>): R
   return body
 }
 
-function createShape(specs: WriteFieldSpec[]): z.ZodRawShape {
-  const shape: z.ZodRawShape = {}
+function createShape(specs: WriteFieldSpec[]): ParamShape {
+  const shape: ParamShape = {}
   for (const spec of specs) {
     shape[spec.name] = spec.required ? spec.zod : spec.zod.optional()
   }
@@ -25,8 +25,8 @@ function createShape(specs: WriteFieldSpec[]): z.ZodRawShape {
   return shape
 }
 
-function updateShape(specs: WriteFieldSpec[]): z.ZodRawShape {
-  const shape: z.ZodRawShape = { id: z.string().describe("Record id to update.") }
+function updateShape(specs: WriteFieldSpec[]): ParamShape {
+  const shape: ParamShape = { id: z.string().describe("Record id to update.") }
   for (const spec of specs) {
     shape[spec.name] = spec.zod.optional()
   }

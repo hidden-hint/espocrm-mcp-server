@@ -1,6 +1,6 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
-import type { z } from "zod"
 import type { EspoClient } from "../espo/client.js"
+import type { ParamShape } from "../espo/fields.js"
 import type { MetadataService } from "../espo/metadata.js"
 
 // Bound to a single request: the client is already authenticated as the caller,
@@ -14,6 +14,6 @@ export interface ToolDef {
   name: string
   title: string
   description: string
-  inputSchema: z.ZodRawShape
+  inputSchema: ParamShape
   handler: (args: any) => Promise<CallToolResult>
 }

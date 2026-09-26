@@ -2,6 +2,8 @@ import { z } from "zod"
 
 export type FieldMap = Record<string, Record<string, unknown>>
 
+export type ParamShape = Record<string, z.ZodType>
+
 export interface WhereItem {
   type: string
   attribute?: string
@@ -37,12 +39,12 @@ const FILTERABLE_PRIORITY: Record<string, number> = {
 const MAX_TYPED_FILTERS: number = 25
 
 interface Contribution {
-  params: z.ZodRawShape
+  params: ParamShape
   build: (args: Record<string, unknown>) => WhereItem[]
 }
 
 export interface EntityFilters {
-  params: z.ZodRawShape
+  params: ParamShape
   toConditions: (args: Record<string, unknown>) => WhereItem[]
 }
 
@@ -104,8 +106,8 @@ function valuesByLabel(options: string[], labels: OptionLabels): Record<string, 
   return Object.fromEntries(unambiguous.map((option: string): [string, string] => [labels[option]!, option]))
 }
 
-function enumSchema(options: string[], labels: OptionLabels): z.ZodTypeAny {
-  const values: z.ZodEnum<[string, ...string[]]> = z.enum(options as [string, ...string[]])
+function enumSchema(options: string[], labels: OptionLabels): z.ZodType {
+  const values: z.ZodType = z.enum(options as [string, ...string[]])
   const byLabel: Record<string, string> = valuesByLabel(options, labels)
   if (Object.keys(byLabel).length === 0) {
     return values
@@ -117,7 +119,7 @@ function enumSchema(options: string[], labels: OptionLabels): z.ZodTypeAny {
   )
 }
 
-function describedSchema(schema: z.ZodTypeAny, note: string): z.ZodTypeAny {
+function describedSchema(schema: z.ZodType, note: string): z.ZodType {
   return note === "" ? schema : schema.describe(note)
 }
 
@@ -129,7 +131,7 @@ function sentences(...parts: string[]): string {
   return parts.filter((part: string): boolean => part !== "").join(" ")
 }
 
-function rangeContribution(name: string, makeSchema: () => z.ZodTypeAny, unit: string): Contribution | null {
+function rangeContribution(name: string, makeSchema: () => z.ZodType, unit: string): Contribution | null {
   const from: string = `${name}From`
   const to: string = `${name}To`
   if (RESERVED.has(from) || RESERVED.has(to)) {
@@ -225,7 +227,7 @@ export function buildFilters(fields: FieldMap): EntityFilters {
     .filter((candidate: FilterCandidate): boolean => candidate.priority < 99)
     .sort((first: FilterCandidate, second: FilterCandidate): number => first.priority - second.priority)
 
-  const params: z.ZodRawShape = {}
+  const params: ParamShape = {}
   const contributions: Contribution[] = []
   const usedNames: Set<string> = new Set<string>()
 
@@ -256,7 +258,7 @@ export function buildFilters(fields: FieldMap): EntityFilters {
 export interface WriteFieldSpec {
   name: string
   required: boolean
-  zod: z.ZodTypeAny
+  zod: z.ZodType
   json: Record<string, unknown>
 }
 
@@ -299,7 +301,7 @@ function writeSpecFor(name: string, definition: Record<string, unknown>): WriteF
       const options: string[] = stringOptions(definition.options)
       const labels: OptionLabels = optionLabels(definition)
       const note: string = inputLabelDescription(options, labels)
-      const itemZod: z.ZodTypeAny = options.length === 0 ? z.string() : enumSchema(options, labels)
+      const itemZod: z.ZodType = options.length === 0 ? z.string() : enumSchema(options, labels)
       const itemJson: Record<string, unknown> =
         options.length === 0 ? { type: "string" } : { type: "string", enum: options }
 
