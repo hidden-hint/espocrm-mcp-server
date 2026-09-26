@@ -1,25 +1,25 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { z } from "zod"
-import type { FieldMap } from "../../src/espo/fields.js"
+import type { FieldMap, ParamShape } from "../../src/espo/fields.js"
 import { buildFilters, entityObjectSchema, writableFields } from "../../src/espo/fields.js"
 import type { WriteFieldSpec } from "../../src/espo/fields.js"
 
 // Unwraps the optional / label-normalizing wrappers a param schema may carry to
 // assert on the set of values the JSON Schema will actually offer the model.
-function enumValues(schema: z.ZodTypeAny): string[] {
+function enumValues(schema: z.ZodType): string[] {
   if (schema instanceof z.ZodOptional) {
-    return enumValues(schema.unwrap() as z.ZodTypeAny)
+    return enumValues(schema.unwrap() as z.ZodType)
   }
-  if (schema instanceof z.ZodEffects) {
-    return enumValues(schema.innerType() as z.ZodTypeAny)
+  if (schema instanceof z.ZodPipe) {
+    return enumValues(schema.out as z.ZodType)
   }
   if (schema instanceof z.ZodArray) {
-    return enumValues(schema.element as z.ZodTypeAny)
+    return enumValues(schema.element as z.ZodType)
   }
   assert.ok(schema instanceof z.ZodEnum, "expected an enum schema")
 
-  return (schema as z.ZodEnum<[string, ...string[]]>).options
+  return schema.options.map(String)
 }
 
 const LEAD_FIELDS: FieldMap = {
@@ -54,7 +54,7 @@ const TRANSLATED_FIELDS: FieldMap = {
 }
 
 test("buildFilters emits typed params for enum, bool, link, and range fields", (): void => {
-  const params: z.ZodRawShape = buildFilters(LEAD_FIELDS).params
+  const params: ParamShape = buildFilters(LEAD_FIELDS).params
   const keys: string[] = Object.keys(params)
   assert.ok(keys.includes("status"))
   assert.ok(keys.includes("doNotCall"))
@@ -140,12 +140,12 @@ test("an enum filter documents the UI label of every renamed option", (): void =
 })
 
 test("an enum filter still exposes only the stored values as its allowed set", (): void => {
-  const status: z.ZodTypeAny = buildFilters(TRANSLATED_FIELDS).params.status!
+  const status: z.ZodType = buildFilters(TRANSLATED_FIELDS).params.status!
   assert.deepEqual(enumValues(status), ["New", "Assigned", "Dead"])
 })
 
 test("an enum filter accepts a UI label and normalizes it to the stored value", (): void => {
-  const status: z.ZodTypeAny = buildFilters(TRANSLATED_FIELDS).params.status!
+  const status: z.ZodType = buildFilters(TRANSLATED_FIELDS).params.status!
   assert.equal(status.parse("In Talks"), "Assigned")
   assert.equal(status.parse("Assigned"), "Assigned")
   assert.throws(() => status.parse("Nonexistent"))
