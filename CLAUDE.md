@@ -19,7 +19,7 @@ Tests use the **Node built-in test runner** (`node:test`) run through `tsx` (no 
 
 Tests never reach `dist`: the build uses `tsconfig.json` (`rootDir: src`), which excludes `tests/` automatically. `typecheck` uses `tsconfig.test.json`, which additionally includes `tests/`.
 
-CI (`.github/workflows/ci.yml`) runs `typecheck`, `test`, and `build` on every push and pull request to `master` (Node 22.x and 24.x).
+CI (`.github/workflows/ci.yml`) runs `typecheck`, `test`, and `build` on every push and pull request to `master` (Node 26.x).
 
 ### Test-driven development is mandatory
 
